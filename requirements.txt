@@ -1,0 +1,5 @@
+# No external dependencies required
+# This project uses Python standard library only
+
+# Minimum Python version: 3.7
+# (requires dataclasses which was added in Python 3.7)

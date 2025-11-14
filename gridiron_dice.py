@@ -1,0 +1,373 @@
+# Gridiron Dice Football - full simulation (v0.3)
+# Paste into Codex (or your IDE) and run.
+# Author: Synthia + You
+
+import random
+from dataclasses import dataclass, field
+from typing import List, Tuple, Optional, Dict
+
+# -----------------------------
+# Config
+# -----------------------------
+BLOCKS_PER_HALF = 180  # 30 minutes, 10 sec per block
+PUNT_YARDS = 40
+FG_GOOD_ON = {2, 3, 4}  # 1d4: 2-4 good
+SEED = None  # set to an int for reproducible runs
+
+# -----------------------------
+# Drive tables
+# Each entry is (yards, time_blocks) for rolls 0..19
+# Yards can be "TD" and time may be "1-20" for TD results.
+# These match the CSV you asked me to generate.
+# -----------------------------
+BALANCED = [
+    (0,4),(3,5),(5,6),(6,6),(7,7),(9,8),(12,9),(15,10),
+    (18,11),(25,14),(32,17),(38,19),(45,22),(55,26),
+    (68,31),(85,38),
+    ("TD","1-20"),("TD","1-20"),("TD","1-20"),("TD","1-20"),
+]
+
+RUN_FIRST = [
+    (0,9),(1,9),(2,9),(3,9),(4,9),(6,9),(8,10),(10,11),
+    (12,12),(15,15),(18,18),(22,20),(26,23),(30,27),
+    (34,32),(38,39),
+    (42,21),(48,23),(55,26),("TD","1-20"),
+]
+
+PASS_FIRST = [
+    (0,2),(5,3),(7,4),(9,4),(12,5),(15,6),(18,7),(22,8),
+    (28,9),(35,12),(42,15),(50,17),(60,20),(70,24),
+    (80,29),(95,36),
+    ("TD","1-20"),("TD","1-20"),("TD","1-20"),("TD","1-20"),
+]
+
+TABLES = {
+    "balanced": BALANCED,
+    "run": RUN_FIRST,
+    "pass": PASS_FIRST,
+}
+
+STYLES = ("balanced", "run", "pass")
+
+# -----------------------------
+# Coordinate system:
+# Absolute field coordinate 0..100:
+# - 0 = Bombers' goal line
+# - 100 = Gunners' goal line
+# Offense advances TOWARD opponent's goal.
+#   If team == "Bombers": advance +yards; yards_to_endzone = 100 - x
+#   If team == "Gunners": advance -yards; yards_to_endzone = x - 0
+# Kickoffs:
+#   Bombers start @ 30  -> x=30
+#   Gunners start @ 30 -> relative => x = 100-30 = 70
+# -----------------------------
+
+def kickoff_position(next_team: str) -> int:
+    return 30 if next_team == "Bombers" else 70
+
+def yards_to_endzone(team: str, x: int) -> int:
+    return (100 - x) if team == "Bombers" else x
+
+def advance(team: str, x: int, yards: int) -> int:
+    if team == "Bombers":
+        return min(100, x + yards)
+    else:
+        return max(0, x - yards)
+
+def within_fg_range(team: str, x: int) -> bool:
+    return yards_to_endzone(team, x) <= 35
+
+def punt_spot(offense: str, x: int) -> int:
+    # Punt goes 40 toward opponent goal; touchback puts receiving team at their 20
+    if offense == "Bombers":
+        raw = x + PUNT_YARDS
+        return 80 if raw >= 100 else raw
+    else:
+        raw = x - PUNT_YARDS
+        return 20 if raw <= 0 else raw
+
+def missed_fg_spot(offense: str, x: int) -> int:
+    # After a missed FG, move ball back 7 yards from the attempt line
+    # Then receiving team starts at that spot UNLESS it's inside their 20, then at their 20.
+    if offense == "Bombers":
+        new_spot = max(0, x - 7)  # move back toward Bombers' goal
+        # Receiving = Gunners (own 20 is x=80)
+        return 80 if new_spot > 80 else new_spot
+    else:
+        new_spot = min(100, x + 7)  # move back toward Gunners' goal
+        # Receiving = Bombers (own 20 is x=20)
+        return 20 if new_spot < 20 else new_spot
+
+def time_for_required_yards(style: str, yards_needed: int) -> int:
+    """
+    For TD time-capping rule:
+    Find the smallest non-TD row with yards >= yards_needed; return its time.
+    If none, return the largest non-TD time for that style.
+    """
+    rows = TABLES[style]
+    candidates = [t for (y,t) in rows if y != "TD"]
+    # rows are in order of roll; pick the first where yards >= needed:
+    for y, t in rows:
+        if y == "TD":
+            continue
+        if y >= yards_needed:
+            return t
+    # if none large enough, use the last non-TD time:
+    return candidates[-1]
+
+def roll_time_for_td(style: str, yards_needed: int) -> int:
+    # 1d20 time with cap by time_for_required_yards
+    raw = random.randint(1, 20)
+    cap = time_for_required_yards(style, yards_needed)
+    return min(raw, cap)
+
+def choose_style(team: str, lead: int, blocks_left_in_half: int) -> str:
+    """
+    A simple 'AI coach':
+    - If trailing and <= 60 blocks (~10 min): more pass
+    - If leading and <= 60 blocks: more run
+    - Else: balanced bias
+    """
+    if blocks_left_in_half <= 60:
+        if lead < 0:  # trailing
+            weights = {"pass": 0.55, "balanced": 0.35, "run": 0.10}
+        elif lead > 0:  # leading
+            weights = {"run": 0.50, "balanced": 0.40, "pass": 0.10}
+        else:  # tied late
+            weights = {"pass": 0.40, "balanced": 0.45, "run": 0.15}
+    else:
+        weights = {"balanced": 0.5, "pass": 0.30, "run": 0.20}
+
+    r = random.random()
+    cum = 0
+    for s, w in weights.items():
+        cum += w
+        if r <= cum:
+            return s
+    return "balanced"
+
+@dataclass
+class DriveLog:
+    half: int
+    team: str
+    start_x: int
+    style: str
+    roll: int
+    yards: int
+    time_blocks: int
+    end_x: int
+    result: str
+    points: int
+
+@dataclass
+class GameResult:
+    drives: List[DriveLog] = field(default_factory=list)
+    score: Dict[str, int] = field(default_factory=lambda: {"Bombers":0, "Gunners":0})
+
+def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, half: int, score) -> Tuple[DriveLog, int, Optional[str], int]:
+    """
+    Returns: (DriveLog, blocks_spent, next_possession_team, next_start_x)
+    If next_possession_team is None, same team continues (shouldn't happen in this possession-based design).
+    """
+    # Roll 1d20 on the chosen table
+    roll = random.randint(0, 19)
+    y, t = TABLES[style][roll]
+
+    # If TD row:
+    if y == "TD":
+        yards_needed = yards_to_endzone(team, x)
+        time_spent = roll_time_for_td(style, yards_needed)
+        # Late-half enforcement:
+        if time_spent > blocks_left:
+            # Step back: find largest row that leaves >=1 block
+            adj_y, adj_t = largest_fitting_row(style, blocks_left)
+            # Apply adjusted row:
+            end_x = advance(team, x, adj_y)
+            # Check: is adjusted yardage a TD? Our non-TD rows are numeric yards only.
+            if is_td_yardage(team, end_x):
+                # TD and end half immediately
+                log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "TD (late-half adj)", 7)
+                return log, blocks_left, opponent, kickoff_position(opponent)  # half ends by caller when it sees 0 left
+            # Not TD; if FG range, allow FG attempt as the final action:
+            if within_fg_range(team, end_x):
+                fg_good = random.randint(1,4) in FG_GOOD_ON
+                if fg_good:
+                    log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "FG Good (late-half)", 3)
+                    score[team] += 3
+                else:
+                    # Missed FG late-half: move back 7, clamp at receiving 20
+                    miss_spot = missed_fg_spot(team, end_x)
+                    log = DriveLog(half, team, x, style, roll, adj_y, adj_t, miss_spot, "FG Miss (late-half, spot set)", 0)
+                return log, blocks_left, opponent, kickoff_position(opponent)  # half ends
+            # Otherwise half ends with no score:
+            log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Half Ends (adj)", 0)
+            return log, blocks_left, opponent, kickoff_position(opponent)
+
+        # TD fits in time:
+        end_x = 100 if team == "Bombers" else 0
+        log = DriveLog(half, team, x, style, roll, yards_to_endzone(team, x), time_spent, end_x, "TD", 7)
+        score[team] += 7
+        return log, time_spent, opponent, kickoff_position(opponent)
+
+    # Non-TD row
+    time_spent = t
+    yards = y
+
+    # Late-half enforcement if it would overflow:
+    if time_spent > blocks_left:
+        # Use largest row that leaves >=1 block
+        adj_y, adj_t = largest_fitting_row(style, blocks_left)
+        end_x = advance(team, x, adj_y)
+        # If adjusted row reaches TD:
+        if is_td_yardage(team, end_x):
+            log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "TD (late-half adj)", 7)
+            score[team] += 7
+            return log, blocks_left, opponent, kickoff_position(opponent)  # half ends
+        # Else if FG range, allow final FG and end half:
+        if within_fg_range(team, end_x):
+            fg_good = random.randint(1,4) in FG_GOOD_ON
+            if fg_good:
+                log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "FG Good (late-half)", 3)
+                score[team] += 3
+            else:
+                # Missed FG late-half: move back 7, clamp at receiving 20
+                miss_spot = missed_fg_spot(team, end_x)
+                log = DriveLog(half, team, x, style, roll, adj_y, adj_t, miss_spot, "FG Miss (late-half, spot set)", 0)
+            return log, blocks_left, opponent, kickoff_position(opponent)  # half ends
+        # Otherwise half ends immediately:
+        log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Half Ends (adj)", 0)
+        return log, blocks_left, opponent, kickoff_position(opponent)
+
+    # Fits in time -> resolve normally
+    end_x = advance(team, x, yards)
+
+    # If yardage reaches end zone by yardage (not TD row), apply TD-time cap rule:
+    if is_td_yardage(team, end_x):
+        # time cap by "required yards" row
+        yards_needed = yards_to_endzone(team, x)
+        td_time = roll_time_for_td(style, yards_needed)
+        time_spent = min(time_spent, td_time)
+        end_x = 100 if team == "Bombers" else 0
+        log = DriveLog(half, team, x, style, roll, yards_needed, time_spent, end_x, "TD (by yardage)", 7)
+        score[team] += 7
+        return log, time_spent, opponent, kickoff_position(opponent)
+
+    # No TD: decide FG or Punt
+    if within_fg_range(team, end_x):
+        fg_good = random.randint(1,4) in FG_GOOD_ON
+        if fg_good:
+            log = DriveLog(half, team, x, style, roll, yards, time_spent, end_x, "FG Good", 3)
+            score[team] += 3
+            return log, time_spent, opponent, kickoff_position(opponent)
+        else:
+            # missed FG: move back 7, clamp at receiving 20
+            miss_spot = missed_fg_spot(team, end_x)
+            log = DriveLog(half, team, x, style, roll, yards, time_spent, miss_spot, "FG Miss (spot set)", 0)
+            return log, time_spent, opponent, miss_spot
+    else:
+        # Punt
+        spot = punt_spot(team, end_x)
+        log = DriveLog(half, team, x, style, roll, yards, time_spent, spot, "Punt", 0)
+        return log, time_spent, opponent, spot
+
+def largest_fitting_row(style: str, blocks_left: int) -> Tuple[int,int]:
+    """
+    Find the non-TD row with the largest time <= blocks_left-1 (leave >= 1 block).
+    If none fit (e.g., blocks_left == 1), return (0,0).
+    """
+    limit = max(0, blocks_left - 1)
+    best = (0, 0)
+    for (y, t) in TABLES[style]:
+        if y == "TD":
+            continue
+        if t <= limit and t >= best[1]:
+            best = (y, t)
+    return best
+
+def is_td_yardage(team: str, x: int) -> bool:
+    return (x >= 100) if team == "Bombers" else (x <= 0)
+
+def simulate_half(start_team: str, start_x: int, score: Dict[str,int], half: int, rng_seed=None) -> Tuple[List[DriveLog], Dict[str,int], str, int]:
+    drives = []
+    team = start_team
+    opponent = "Gunners" if team == "Bombers" else "Bombers"
+    x = start_x
+    blocks = BLOCKS_PER_HALF
+
+    while blocks > 0:
+        lead = score[team] - score[opponent]
+        style = choose_style(team, lead, blocks)
+        log, spent, next_team, next_x = play_drive(team, opponent, x, style, blocks, half, score)
+        drives.append(log)
+
+        # deduct time:
+        # If late-half branch consumed "blocks_left" (we passed blocks_left in play_drive),
+        # we ensure the half ends right after recording the drive:
+        if log.result.startswith("TD (late-half") or log.result.startswith("FG Good (late-half)") or log.result.startswith("FG Miss (late-half") or log.result == "Half Ends (adj)":
+            # end half immediately after applying the adjustment
+            blocks = 0
+            break
+        else:
+            blocks -= spent
+
+        # possession flips:
+        team = next_team
+        opponent = "Gunners" if team == "Bombers" else "Bombers"
+        x = next_x
+
+    # Return next half's opening possession:
+    # The team that kicked off to start the half will receive next half (handled by caller).
+    return drives, score, team, x
+
+def simulate_game(seed: Optional[int]=SEED) -> GameResult:
+    if seed is not None:
+        random.seed(seed)
+    else:
+        random.seed()
+
+    result = GameResult()
+
+    # First half: Bombers receive at B30
+    score = {"Bombers": 0, "Gunners": 0}
+    h1_drives, score, _, _ = simulate_half("Bombers", 30, score, half=1)
+    result.drives.extend(h1_drives)
+
+    # Second half: Gunners receive at G30 => x=70
+    h2_drives, score, _, _ = simulate_half("Gunners", 70, score, half=2)
+    result.drives.extend(h2_drives)
+
+    result.score = score
+    return result
+
+def simulate_many(n: int=100, seed: Optional[int]=SEED) -> Dict[str, float]:
+    if seed is not None:
+        random.seed(seed)
+    totals = {"Bombers":0, "Gunners":0, "ties":0, "avg_pts":0.0}
+    for _ in range(n):
+        gr = simulate_game(seed=None)
+        b, g = gr.score["Bombers"], gr.score["Gunners"]
+        totals["avg_pts"] += (b + g)
+        if b > g:
+            totals["Bombers"] += 1
+        elif g > b:
+            totals["Gunners"] += 1
+        else:
+            totals["ties"] += 1
+    totals["avg_pts"] /= n
+    return totals
+
+# -----------------------------
+# Example usage
+# -----------------------------
+if __name__ == "__main__":
+    # Single game
+    game = simulate_game()
+    print(f"FINAL: Bombers {game.score['Bombers']} - Gunners {game.score['Gunners']}")
+    for d in game.drives:
+        print(f"H{d.half} | {d.team:8s} | {d.style:8s} | roll={d.roll:2d} | "
+              f"start={d.start_x:3d} -> end={d.end_x:3d} | yds={d.yards:>3} | "
+              f"t={d.time_blocks:2d} | {d.result:20s} | pts={d.points}")
+
+    # Batch
+    stats = simulate_many(200)
+    print("\nBatch (200 games):", stats)
