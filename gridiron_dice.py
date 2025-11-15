@@ -92,6 +92,13 @@ def advance(team: str, x: int, yards: int) -> int:
     else:
         return max(0, x - yards)
 
+def is_safety(team: str, x: int) -> bool:
+    """Check if the field position results in a safety for the offense"""
+    if team == "Bombers":
+        return x < 0  # Bombers driven back past their own goal line
+    else:
+        return x > 100  # Gunners driven back past their own goal line
+
 def within_fg_range(team: str, x: int) -> bool:
     return yards_to_endzone(team, x) <= 50
 
@@ -324,6 +331,12 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
             adj_y, adj_t = largest_fitting_row(style, blocks_left)
             # Apply adjusted row:
             end_x = advance(team, x, adj_y)
+            # Check for safety BEFORE checking turnover or TD
+            if is_safety(team, end_x):
+                # Safety: opponent gets 2 points and ball at their 30
+                log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Safety (late-half)", 0)
+                score[opponent] += 2
+                return log, blocks_left, opponent, kickoff_position(opponent)
             # Check: is adjusted yardage a TD? Our non-TD rows are numeric yards only.
             if is_td_yardage(team, end_x):
                 # Check for turnover
@@ -378,6 +391,12 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
         # Use largest row that leaves >=1 block
         adj_y, adj_t = largest_fitting_row(style, blocks_left)
         end_x = advance(team, x, adj_y)
+        # Check for safety BEFORE checking turnover or TD
+        if is_safety(team, end_x):
+            # Safety: opponent gets 2 points and ball at their 30
+            log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Safety (late-half)", 0)
+            score[opponent] += 2
+            return log, blocks_left, opponent, kickoff_position(opponent)
         # If adjusted row reaches TD:
         if is_td_yardage(team, end_x):
             # Check for turnover
@@ -409,6 +428,13 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
 
     # Fits in time -> resolve normally
     end_x = advance(team, x, yards)
+
+    # Check for safety BEFORE checking turnover
+    if is_safety(team, end_x):
+        # Safety: opponent gets 2 points and ball at their 30
+        log = DriveLog(half, team, x, style, roll, yards, time_spent, end_x, "Safety", 0)
+        score[opponent] += 2
+        return log, time_spent, opponent, kickoff_position(opponent)
 
     # If yardage reaches end zone by yardage (not TD row), apply TD-time cap rule:
     if is_td_yardage(team, end_x):
