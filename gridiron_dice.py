@@ -119,6 +119,43 @@ def attempt_field_goal(team: str, x: int) -> bool:
     # FG is good if make distance >= actual distance
     return make_distance >= distance
 
+def attempt_extra_point(team: str, score: Dict[str, int], blocks_left: int, half: int) -> tuple:
+    """
+    Attempt extra point conversion after touchdown.
+    Returns: (points_scored, conversion_type) where conversion_type is "1pt" or "2pt"
+
+    AI Decision:
+    - Usually go for 1 point (safer, ~85% success)
+    - Go for 2 points if trailing and late in game
+    - Go for 2 points if it provides strategic advantage
+    """
+    opponent = "Gunners" if team == "Bombers" else "Bombers"
+    lead = score[team] - score[opponent]  # Lead BEFORE the TD (TD not added yet)
+
+    # Decide whether to go for 1 or 2
+    go_for_two = False
+
+    # Late in game (last 60 blocks) and trailing
+    if blocks_left <= 60:
+        if lead < -7:  # Down by more than a TD
+            go_for_two = random.random() < 0.70  # 70% chance to go for 2
+        elif lead == -7:  # Down by exactly 7, 2pt would tie
+            go_for_two = random.random() < 0.50  # 50% chance
+        elif lead == -6:  # Down by 6, 2pt would give lead
+            go_for_two = random.random() < 0.40  # 40% chance
+
+    if go_for_two:
+        # Two-point conversion: d10 (0-9), success on 6+
+        roll = random.randint(0, 9)
+        success = roll >= 6
+        return (2 if success else 0), "2pt"
+    else:
+        # One-point conversion: use FG table, success if make distance >= 15
+        roll = random.randint(0, 19)
+        make_distance = FIELD_GOAL_DISTANCE[roll]
+        success = make_distance >= 15
+        return (1 if success else 0), "1pt"
+
 def check_turnover(style: str) -> bool:
     """
     Roll d20 to check for turnover based on play style.
@@ -347,8 +384,12 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
                     log = DriveLog(half, team, x, style, roll, adj_y, adj_t, opponent_20, "Turnover (late-half, would be TD)", 0)
                     return log, blocks_left, opponent, kickoff_position(opponent)
                 # TD and end half immediately
-                log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "TD (late-half adj)", 7)
-                score[team] += 7
+                # Award 6 for TD plus extra point attempt
+                extra_pts, conv_type = attempt_extra_point(team, score, blocks_left, half)
+                total_pts = 6 + extra_pts
+                result_str = f"TD+{conv_type} (late-half adj)"
+                log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, result_str, total_pts)
+                score[team] += total_pts
                 return log, blocks_left, opponent, kickoff_position(opponent)  # half ends by caller when it sees 0 left
             # Not TD; check for turnover first
             if turnover_occurred:
@@ -380,8 +421,12 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
             log = DriveLog(half, team, x, style, roll, yards_gained, time_spent, opponent_20, "Turnover (would be TD)", 0)
             return log, time_spent, opponent, opponent_20
 
-        log = DriveLog(half, team, x, style, roll, yards_gained, time_spent, end_x, "TD", 7)
-        score[team] += 7
+        # Award 6 for TD plus extra point attempt
+        extra_pts, conv_type = attempt_extra_point(team, score, blocks_left, half)
+        total_pts = 6 + extra_pts
+        result_str = f"TD+{conv_type}"
+        log = DriveLog(half, team, x, style, roll, yards_gained, time_spent, end_x, result_str, total_pts)
+        score[team] += total_pts
         return log, time_spent, opponent, kickoff_position(opponent)
 
     # Non-TD row
@@ -406,8 +451,12 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
                 opponent_20 = 20 if opponent == "Bombers" else 80
                 log = DriveLog(half, team, x, style, roll, adj_y, adj_t, opponent_20, "Turnover (late-half, would be TD)", 0)
                 return log, blocks_left, opponent, kickoff_position(opponent)
-            log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "TD (late-half adj)", 7)
-            score[team] += 7
+            # Award 6 for TD plus extra point attempt
+            extra_pts, conv_type = attempt_extra_point(team, score, blocks_left, half)
+            total_pts = 6 + extra_pts
+            result_str = f"TD+{conv_type} (late-half adj)"
+            log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, result_str, total_pts)
+            score[team] += total_pts
             return log, blocks_left, opponent, kickoff_position(opponent)  # half ends
         # Check for turnover before FG/punt
         if turnover_occurred:
@@ -453,8 +502,12 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
             log = DriveLog(half, team, x, style, roll, yards_needed, time_spent, opponent_20, "Turnover (would be TD)", 0)
             return log, time_spent, opponent, opponent_20
 
-        log = DriveLog(half, team, x, style, roll, yards_needed, time_spent, end_x_td, "TD (by yardage)", 7)
-        score[team] += 7
+        # Award 6 for TD plus extra point attempt
+        extra_pts, conv_type = attempt_extra_point(team, score, blocks_left, half)
+        total_pts = 6 + extra_pts
+        result_str = f"TD+{conv_type} (by yardage)"
+        log = DriveLog(half, team, x, style, roll, yards_needed, time_spent, end_x_td, result_str, total_pts)
+        score[team] += total_pts
         return log, time_spent, opponent, kickoff_position(opponent)
 
     # No TD: decide FG, Punt, or 4th down attempt
@@ -473,9 +526,12 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
 
         if is_td:
             # Touchdown on 4th down attempt
-            result_str = f"4th down conversion TD ({'goal' if is_4th_and_goal else yards_to_go})"
-            log = DriveLog(half, team, x, style, roll, yards, time_spent, new_x, result_str, 7)
-            score[team] += 7
+            # Award 6 for TD plus extra point attempt
+            extra_pts, conv_type = attempt_extra_point(team, score, blocks_left, half)
+            total_pts = 6 + extra_pts
+            result_str = f"4th down TD+{conv_type} ({'goal' if is_4th_and_goal else yards_to_go})"
+            log = DriveLog(half, team, x, style, roll, yards, time_spent, new_x, result_str, total_pts)
+            score[team] += total_pts
             return log, time_spent, opponent, kickoff_position(opponent)
         elif is_first_down:
             # Successful conversion - first down, drive continues with new style
