@@ -95,9 +95,9 @@ def advance(team: str, x: int, yards: int) -> int:
 def is_safety(team: str, x: int) -> bool:
     """Check if the field position results in a safety for the offense"""
     if team == "Bombers":
-        return x < 0  # Bombers driven back past their own goal line
+        return x <= 0  # Bombers at or past their own goal line (0)
     else:
-        return x > 100  # Gunners driven back past their own goal line
+        return x >= 100  # Gunners at or past their own goal line (100)
 
 def within_fg_range(team: str, x: int) -> bool:
     return yards_to_endzone(team, x) <= 50
