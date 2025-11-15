@@ -124,25 +124,27 @@ def attempt_extra_point(team: str, score: Dict[str, int], blocks_left: int, half
     Attempt extra point conversion after touchdown.
     Returns: (points_scored, conversion_type) where conversion_type is "1pt" or "2pt"
 
-    AI Decision:
-    - Usually go for 1 point (safer, ~85% success)
-    - Go for 2 points if trailing and late in game
-    - Go for 2 points if it provides strategic advantage
+    AI Decision (late game, last 60 blocks):
+    - Down by 8+: Go for 2 (70%) - to tie or get closer
+    - Down by 7: Go for 2 (80%) - 2pt takes lead, 1pt only ties
+    - Down by 6: Go for 1 (80%) - 1pt takes lead (safer than 2pt)
+    - Otherwise: Go for 1 (safer, ~85% success)
     """
     opponent = "Gunners" if team == "Bombers" else "Bombers"
     lead = score[team] - score[opponent]  # Lead BEFORE the TD (TD not added yet)
 
     # Decide whether to go for 1 or 2
+    # After 6pt TD: lead_after = lead + 6
     go_for_two = False
 
-    # Late in game (last 60 blocks) and trailing
+    # Late in game (last 60 blocks) and strategic situations
     if blocks_left <= 60:
-        if lead < -7:  # Down by more than a TD
+        if lead <= -8:  # Down by 8+: After TD down by 2+, 2pt ties or gets closer
             go_for_two = random.random() < 0.70  # 70% chance to go for 2
-        elif lead == -7:  # Down by exactly 7, 2pt would tie
-            go_for_two = random.random() < 0.50  # 50% chance
-        elif lead == -6:  # Down by 6, 2pt would give lead
-            go_for_two = random.random() < 0.40  # 40% chance
+        elif lead == -7:  # Down by 7: After TD down by 1, 2pt TAKES LEAD (1pt only ties)
+            go_for_two = random.random() < 0.80  # 80% chance to go for 2
+        elif lead == -6:  # Down by 6: After TD tied, 1pt takes lead (safer)
+            go_for_two = random.random() < 0.20  # 20% chance, prefer safer 1pt
 
     if go_for_two:
         # Two-point conversion: d10 (0-9), success on 6+
