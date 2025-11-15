@@ -42,11 +42,20 @@ def format_drive_chart(game, output_file="DRIVE_CHART.md"):
                 # Drive header
                 f.write(f"#### Drive {i}: {drive.team}\n\n")
 
+                # Calculate actual field position change
+                if drive.team == "Bombers":
+                    # Bombers move towards 100
+                    field_position_change = drive.end_x - drive.start_x
+                else:
+                    # Gunners move towards 0
+                    field_position_change = drive.start_x - drive.end_x
+
                 # Drive details
                 f.write(f"- **Play Style:** {drive.style.title()}\n")
                 f.write(f"- **Starting Position:** {drive.start_x} yard line\n")
                 f.write(f"- **Ending Position:** {drive.end_x} yard line\n")
-                f.write(f"- **Yards Gained:** {drive.yards}\n")
+                f.write(f"- **Drive Result Yards:** {drive.yards}\n")
+                f.write(f"- **Net Field Position Change:** {field_position_change} yards\n")
                 f.write(f"- **Time Consumed:** {drive.time_blocks} blocks ({drive.time_blocks * 10} seconds)\n")
                 f.write(f"- **Result:** {drive.result}\n")
                 f.write(f"- **Points Scored:** {drive.points}\n")
