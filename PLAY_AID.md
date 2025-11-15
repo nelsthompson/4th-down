@@ -133,6 +133,10 @@ Roll a d20 (0-19) and consult the table for your chosen play style.
   - **41-50 yards:** Roll 1d6, good on 6 (16.7%)
   - **Miss:** Opponent gets ball 7 yards back (min their 20)
 - **Punt:** Opponent gets ball 40 yards downfield (touchback at their 20)
+- **Safety:**
+  - **When:** Drive result pushes offense to/past their own goal line
+  - **Check:** Happens BEFORE turnover check
+  - **Effect:** Opponent scores 2 points, gets ball at their 30-yard line
 - **Turnover (Roll d20 for each drive):**
   - **Run-first:** Turnover on 0 (5% chance)
   - **Balanced:** Turnover on 0-1 (10% chance)
@@ -140,13 +144,17 @@ Roll a d20 (0-19) and consult the table for your chosen play style.
   - **Effect:** No punt/FG, opponent gets ball at current spot
   - **If TD:** TD negated, opponent gets ball at their 20
 - **4th Down Conversions:**
-  - **After each non-TD drive:** Roll d10 (1-10) for yards to go
+  - **After each non-TD drive:** Roll for yards to go (style-dependent)
+    - **Run-first:** d8 (1-8 yards)
+    - **Balanced:** d10 (1-10 yards)
+    - **Pass-first:** d20 (1-20 yards)
   - **If yards to go ≥ distance to goal:** It's 4th and goal
+  - **If yards to go ≥ 11:** Automatic failure (can't convert 11+ yards)
   - **AI Decision:** Team decides whether to go for it based on:
     - Field position (more likely near goal)
     - Yards to go (more likely on 4th and short)
     - Game situation (trailing, late game)
-  - **If going for it:** Roll d10 again
+  - **If going for it:** Roll d10 for attempt
     - **Success if roll > yards to go:** Move ball forward by roll amount
     - **If reaches goal line:** Touchdown (7 points)
     - **Otherwise:** Same team starts fresh drive from new position
