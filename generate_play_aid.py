@@ -88,7 +88,11 @@ def generate_play_aid(output_file="PLAY_AID.md"):
         f.write("- 1 time block = 10 seconds\n\n")
 
         f.write("### Drive Outcomes\n")
-        f.write("- **Touchdown (TD):** Score 7 points, opponent receives kickoff\n")
+        f.write("- **Touchdown (TD):** Score 6 points + extra point attempt\n")
+        f.write("  - **One-point conversion:** Roll on FG table, good if make distance ≥ 15 yards (~85% success)\n")
+        f.write("  - **Two-point conversion:** Roll d10 (0-9), good on 6+ (40% success)\n")
+        f.write("  - **Final TD score:** 6, 7, or 8 points total\n")
+        f.write("  - **After scoring:** Opponent receives kickoff\n")
         f.write("- **Field Goal Attempts:** Within 50 yards\n")
         f.write("  - **Roll d20 (0-19)** and look up make distance:\n")
         f.write("    - 0: 0 yards | 1: 15 yards | 2: 20 yards | 3: 25 yards\n")

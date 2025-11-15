@@ -124,7 +124,11 @@ Roll a d20 (0-19) and consult the table for your chosen play style.
 - 1 time block = 10 seconds
 
 ### Drive Outcomes
-- **Touchdown (TD):** Score 7 points, opponent receives kickoff
+- **Touchdown (TD):** Score 6 points + extra point attempt
+  - **One-point conversion:** Roll on FG table, good if make distance ≥ 15 yards (~85% success)
+  - **Two-point conversion:** Roll d10 (0-9), good on 6+ (40% success)
+  - **Final TD score:** 6, 7, or 8 points total
+  - **After scoring:** Opponent receives kickoff
 - **Field Goal Attempts:** Within 50 yards
   - **Roll d20 (0-19)** and look up make distance:
     - 0: 0 yards | 1: 15 yards | 2: 20 yards | 3: 25 yards
