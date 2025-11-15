@@ -128,17 +128,23 @@ def check_turnover(style: str) -> bool:
     turnover_roll = random.randint(0, 19)
     return turnover_roll in TURNOVER_THRESHOLDS[style]
 
-def should_go_for_it(team: str, x: int, score: Dict[str, int], blocks_left: int, half: int) -> bool:
+def should_go_for_it(team: str, x: int, score: Dict[str, int], blocks_left: int, half: int, yards_gained: int) -> bool:
     """
     AI decision: should the team go for it on 4th down?
     Considers game situation, field position, and score.
+    Uses realistic 4th down distance based on yards gained.
     """
     opponent = "Gunners" if team == "Bombers" else "Bombers"
     lead = score[team] - score[opponent]
     distance_to_goal = yards_to_endzone(team, x)
 
-    # Roll d10 for yards to go (1-10)
-    yards_to_go = random.randint(1, 10)
+    # Calculate yards to go based on drive result
+    # If drive gained less than 10 yards, yards to go = 10 - yards gained
+    # Otherwise, roll d10 for random distance
+    if yards_gained < 10:
+        yards_to_go = 10 - yards_gained
+    else:
+        yards_to_go = random.randint(1, 10)
 
     # If yards to go >= distance to goal, it's 4th and goal
     if yards_to_go >= distance_to_goal:
@@ -422,14 +428,14 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
         return log, time_spent, opponent, kickoff_position(opponent)
 
     # No TD: decide FG, Punt, or 4th down attempt
-    # Check for turnover first
+    # Check for turnover first - turnovers prevent 4th down attempts
     if turnover_occurred:
         # Turnover: opponent gets ball at current spot
         log = DriveLog(half, team, x, style, roll, yards, time_spent, end_x, "Turnover", 0)
         return log, time_spent, opponent, end_x
 
-    # 4th down decision
-    go_for_it, yards_to_go, is_4th_and_goal = should_go_for_it(team, end_x, score, blocks_left, half)
+    # 4th down decision (only if no turnover)
+    go_for_it, yards_to_go, is_4th_and_goal = should_go_for_it(team, end_x, score, blocks_left, half, yards)
 
     if go_for_it:
         # Attempt 4th down conversion
