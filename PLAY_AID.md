@@ -125,13 +125,12 @@ Roll a d20 (0-19) and consult the table for your chosen play style.
 
 ### Drive Outcomes
 - **Touchdown (TD):** Score 7 points, opponent receives kickoff
-- **Field Goal Range:** Within 50 yards (distance-dependent)
-  - **0-10 yards:** Roll 1d6, good on 2+ (83.3%)
-  - **11-20 yards:** Roll 1d6, good on 3+ (66.7%)
-  - **21-30 yards:** Roll 1d6, good on 4+ (50%)
-  - **31-40 yards:** Roll 1d6, good on 5+ (33.3%)
-  - **41-50 yards:** Roll 1d6, good on 6 (16.7%)
-  - **Miss:** Opponent gets ball 7 yards back (min their 20)
+- **Field Goal Attempts:** Within 50 yards
+  - **Roll d20 (0-19)** and look up make distance:
+    - 0: 0 yards | 1: 15 yards | 2: 20 yards | 3: 25 yards
+    - 4-8: 30 yards | 9-12: 35 yards | 13-16: 40 yards | 17-19: 45 yards
+  - **If make distance ≥ actual distance:** FG good (3 points)
+  - **If make distance < actual distance:** FG miss, opponent gets ball 7 yards back (min their 20)
 - **Punt:** Opponent gets ball 40 yards downfield (touchback at their 20)
 - **Safety:**
   - **When:** Drive result pushes offense to/past their own goal line
