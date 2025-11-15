@@ -13,16 +13,6 @@ BLOCKS_PER_HALF = 180  # 30 minutes, 10 sec per block
 PUNT_YARDS = 40
 SEED = None  # set to an int for reproducible runs
 
-# Field Goal Rules (distance-dependent on d6)
-# Distance to opponent's goal -> Required roll
-FG_RULES = {
-    (0, 10): 2,    # 0-10 yards: 2+ on d6 (83.3%)
-    (11, 20): 3,   # 11-20 yards: 3+ on d6 (66.7%)
-    (21, 30): 4,   # 21-30 yards: 4+ on d6 (50%)
-    (31, 40): 5,   # 31-40 yards: 5+ on d6 (33.3%)
-    (41, 50): 6,   # 41-50 yards: 6 on d6 (16.7%)
-}
-
 # Turnover Rules (roll d20 for each drive)
 # Style -> Turnover on these rolls
 TURNOVER_THRESHOLDS = {
@@ -71,6 +61,12 @@ FOURTH_DOWN_CONVERSION = [
     4, 5, 6, 7, 8, 10, 14, 20, 30, "TD"
 ]
 
+# Field goal make distance table (d20, 0-19)
+FIELD_GOAL_DISTANCE = [
+    0, 15, 20, 25, 30, 30, 30, 30, 30, 35,
+    35, 35, 35, 40, 40, 40, 40, 45, 45, 45
+]
+
 STYLES = ("balanced", "run", "pass")
 
 # -----------------------------
@@ -110,25 +106,18 @@ def within_fg_range(team: str, x: int) -> bool:
 
 def attempt_field_goal(team: str, x: int) -> bool:
     """
-    Attempt a field goal based on distance to opponent's goal.
+    Attempt a field goal using d20 make distance table.
     Returns True if successful, False if missed.
+    Roll d20, if result >= yards to goal line, FG is good.
     """
     distance = yards_to_endzone(team, x)
 
-    # Find the appropriate FG rule based on distance
-    required_roll = None
-    for (min_dist, max_dist), req_roll in FG_RULES.items():
-        if min_dist <= distance <= max_dist:
-            required_roll = req_roll
-            break
+    # Roll d20 (0-19) and look up make distance
+    roll = random.randint(0, 19)
+    make_distance = FIELD_GOAL_DISTANCE[roll]
 
-    # If beyond 50 yards, can't attempt
-    if required_roll is None:
-        return False
-
-    # Roll d6 and check if >= required roll
-    roll = random.randint(1, 6)
-    return roll >= required_roll
+    # FG is good if make distance >= actual distance
+    return make_distance >= distance
 
 def check_turnover(style: str) -> bool:
     """
