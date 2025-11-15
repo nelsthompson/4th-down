@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""
+Generate a play aid reference table for Gridiron Dice Football
+Shows drive outcomes for each play style and die roll
+"""
+
+from gridiron_dice import BALANCED, RUN_FIRST, PASS_FIRST
+
+def generate_play_aid(output_file="PLAY_AID.md"):
+    """Generate a markdown play aid table"""
+
+    with open(output_file, 'w') as f:
+        # Header
+        f.write("# Gridiron Dice Football - Play Aid\n\n")
+        f.write("## Drive Outcome Tables\n\n")
+        f.write("Roll a d20 (0-19) and consult the table for your chosen play style.\n\n")
+        f.write("**Format:** Yards / Time Blocks\n\n")
+
+        # Create the main comparison table
+        f.write("### Drive Outcome Comparison\n\n")
+        f.write("| Roll | Balanced | Run-First | Pass-First |\n")
+        f.write("|------|----------|-----------|------------|\n")
+
+        for i in range(20):
+            balanced_outcome = BALANCED[i]
+            run_outcome = RUN_FIRST[i]
+            pass_outcome = PASS_FIRST[i]
+
+            # Format each outcome
+            def format_outcome(outcome):
+                yards, time = outcome
+                if yards == "TD":
+                    return "**TD** / 1-20"
+                else:
+                    return f"{yards} / {time}"
+
+            f.write(f"| {i:2d}   | {format_outcome(balanced_outcome):12s} | {format_outcome(run_outcome):12s} | {format_outcome(pass_outcome):12s} |\n")
+
+        # Individual style tables for detailed reference
+        f.write("\n---\n\n")
+        f.write("## Detailed Tables by Style\n\n")
+
+        # Balanced
+        f.write("### Balanced Offense\n\n")
+        f.write("| Roll | Yards | Time Blocks | Notes |\n")
+        f.write("|------|-------|-------------|-------|\n")
+        for i, (yards, time) in enumerate(BALANCED):
+            if yards == "TD":
+                f.write(f"| {i:2d}   | TD    | 1-20        | Roll 1d20, cap by yards needed |\n")
+            else:
+                f.write(f"| {i:2d}   | {yards:3d}   | {time:2d}          |       |\n")
+
+        f.write("\n")
+
+        # Run-First
+        f.write("### Run-First Offense\n\n")
+        f.write("| Roll | Yards | Time Blocks | Notes |\n")
+        f.write("|------|-------|-------------|-------|\n")
+        for i, (yards, time) in enumerate(RUN_FIRST):
+            if yards == "TD":
+                f.write(f"| {i:2d}   | TD    | 1-20        | Roll 1d20, cap by yards needed |\n")
+            else:
+                f.write(f"| {i:2d}   | {yards:3d}   | {time:2d}          |       |\n")
+
+        f.write("\n")
+
+        # Pass-First
+        f.write("### Pass-First Offense\n\n")
+        f.write("| Roll | Yards | Time Blocks | Notes |\n")
+        f.write("|------|-------|-------------|-------|\n")
+        for i, (yards, time) in enumerate(PASS_FIRST):
+            if yards == "TD":
+                f.write(f"| {i:2d}   | TD    | 1-20        | Roll 1d20, cap by yards needed |\n")
+            else:
+                f.write(f"| {i:2d}   | {yards:3d}   | {time:2d}          |       |\n")
+
+        f.write("\n---\n\n")
+
+        # Game rules summary
+        f.write("## Game Rules Summary\n\n")
+        f.write("### Field Position\n")
+        f.write("- Field coordinates: 0 (Bombers goal) to 100 (Gunners goal)\n")
+        f.write("- Kickoffs start at team's own 30-yard line\n")
+        f.write("- Field goal range: Within 35 yards of opponent's goal\n\n")
+
+        f.write("### Time\n")
+        f.write("- Each half: 180 time blocks (30 minutes game time)\n")
+        f.write("- 1 time block = 10 seconds\n\n")
+
+        f.write("### Drive Outcomes\n")
+        f.write("- **Touchdown (TD):** Score 7 points, opponent receives kickoff\n")
+        f.write("- **Field Goal Range:** Within 50 yards (distance-dependent)\n")
+        f.write("  - **0-10 yards:** Roll 1d6, good on 2+ (83.3%)\n")
+        f.write("  - **11-20 yards:** Roll 1d6, good on 3+ (66.7%)\n")
+        f.write("  - **21-30 yards:** Roll 1d6, good on 4+ (50%)\n")
+        f.write("  - **31-40 yards:** Roll 1d6, good on 5+ (33.3%)\n")
+        f.write("  - **41-50 yards:** Roll 1d6, good on 6 (16.7%)\n")
+        f.write("  - **Miss:** Opponent gets ball 7 yards back (min their 20)\n")
+        f.write("- **Punt:** Opponent gets ball 40 yards downfield (touchback at their 20)\n\n")
+
+        f.write("### TD Time Cap Rule\n")
+        f.write("When you roll a TD or gain enough yards to reach the end zone:\n")
+        f.write("1. Roll 1d20 for time\n")
+        f.write("2. Find the smallest non-TD row with yards ≥ yards needed\n")
+        f.write("3. Use the minimum of the d20 roll and that row's time\n\n")
+
+        f.write("### Late Half Rule\n")
+        f.write("If time remaining is less than the drive time:\n")
+        f.write("- Use the largest non-TD row that leaves ≥1 block\n")
+        f.write("- If in FG range, attempt FG and half ends\n")
+        f.write("- Otherwise, half ends immediately\n\n")
+
+        f.write("### Play Style Selection (AI)\n")
+        f.write("**With ≤60 blocks remaining (~10 min):**\n")
+        f.write("- Trailing: 55% Pass, 35% Balanced, 10% Run\n")
+        f.write("- Leading: 50% Run, 40% Balanced, 10% Pass\n")
+        f.write("- Tied: 40% Pass, 45% Balanced, 15% Run\n\n")
+        f.write("**Otherwise:**\n")
+        f.write("- 50% Balanced, 30% Pass, 20% Run\n\n")
+
+        f.write("---\n\n")
+        f.write("*Generated by Gridiron Dice Football Simulator*\n")
+
+    print(f"Play aid saved to: {output_file}")
+
+if __name__ == "__main__":
+    generate_play_aid()
+    print("\nPlay aid generated! This reference shows all drive outcomes for quick table lookup.")

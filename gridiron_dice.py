@@ -1,5 +1,5 @@
-# Gridiron Dice Football - full simulation (v0.3)
-# Paste into Codex (or your IDE) and run.
+# Gridiron Dice Football - full simulation (v0.4)
+# Distance-based field goal system
 # Author: Synthia + You
 
 import random
@@ -11,8 +11,17 @@ from typing import List, Tuple, Optional, Dict
 # -----------------------------
 BLOCKS_PER_HALF = 180  # 30 minutes, 10 sec per block
 PUNT_YARDS = 40
-FG_GOOD_ON = {2, 3, 4}  # 1d4: 2-4 good
 SEED = None  # set to an int for reproducible runs
+
+# Field Goal Rules (distance-dependent on d6)
+# Distance to opponent's goal -> Required roll
+FG_RULES = {
+    (0, 10): 2,    # 0-10 yards: 2+ on d6 (83.3%)
+    (11, 20): 3,   # 11-20 yards: 3+ on d6 (66.7%)
+    (21, 30): 4,   # 21-30 yards: 4+ on d6 (50%)
+    (31, 40): 5,   # 31-40 yards: 5+ on d6 (33.3%)
+    (41, 50): 6,   # 41-50 yards: 6 on d6 (16.7%)
+}
 
 # -----------------------------
 # Drive tables
@@ -75,7 +84,29 @@ def advance(team: str, x: int, yards: int) -> int:
         return max(0, x - yards)
 
 def within_fg_range(team: str, x: int) -> bool:
-    return yards_to_endzone(team, x) <= 35
+    return yards_to_endzone(team, x) <= 50
+
+def attempt_field_goal(team: str, x: int) -> bool:
+    """
+    Attempt a field goal based on distance to opponent's goal.
+    Returns True if successful, False if missed.
+    """
+    distance = yards_to_endzone(team, x)
+
+    # Find the appropriate FG rule based on distance
+    required_roll = None
+    for (min_dist, max_dist), req_roll in FG_RULES.items():
+        if min_dist <= distance <= max_dist:
+            required_roll = req_roll
+            break
+
+    # If beyond 50 yards, can't attempt
+    if required_roll is None:
+        return False
+
+    # Roll d6 and check if >= required roll
+    roll = random.randint(1, 6)
+    return roll >= required_roll
 
 def punt_spot(offense: str, x: int) -> int:
     # Punt goes 40 toward opponent goal; touchback puts receiving team at their 20
@@ -190,7 +221,7 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
                 return log, blocks_left, opponent, kickoff_position(opponent)  # half ends by caller when it sees 0 left
             # Not TD; if FG range, allow FG attempt as the final action:
             if within_fg_range(team, end_x):
-                fg_good = random.randint(1,4) in FG_GOOD_ON
+                fg_good = attempt_field_goal(team, end_x)
                 if fg_good:
                     log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "FG Good (late-half)", 3)
                     score[team] += 3
@@ -225,7 +256,7 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
             return log, blocks_left, opponent, kickoff_position(opponent)  # half ends
         # Else if FG range, allow final FG and end half:
         if within_fg_range(team, end_x):
-            fg_good = random.randint(1,4) in FG_GOOD_ON
+            fg_good = attempt_field_goal(team, end_x)
             if fg_good:
                 log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "FG Good (late-half)", 3)
                 score[team] += 3
@@ -254,7 +285,7 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
 
     # No TD: decide FG or Punt
     if within_fg_range(team, end_x):
-        fg_good = random.randint(1,4) in FG_GOOD_ON
+        fg_good = attempt_field_goal(team, end_x)
         if fg_good:
             log = DriveLog(half, team, x, style, roll, yards, time_spent, end_x, "FG Good", 3)
             score[team] += 3
