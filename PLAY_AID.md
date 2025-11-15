@@ -133,6 +133,12 @@ Roll a d20 (0-19) and consult the table for your chosen play style.
   - **41-50 yards:** Roll 1d6, good on 6 (16.7%)
   - **Miss:** Opponent gets ball 7 yards back (min their 20)
 - **Punt:** Opponent gets ball 40 yards downfield (touchback at their 20)
+- **Turnover (Roll d20 for each drive):**
+  - **Run-first:** Turnover on 0 (5% chance)
+  - **Balanced:** Turnover on 0-1 (10% chance)
+  - **Pass-first:** Turnover on 0-2 (15% chance)
+  - **Effect:** No punt/FG, opponent gets ball at current spot
+  - **If TD:** TD negated, opponent gets ball at their 20
 
 ### TD Time Cap Rule
 When you roll a TD or gain enough yards to reach the end zone:

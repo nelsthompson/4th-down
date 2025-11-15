@@ -1,5 +1,5 @@
-# Gridiron Dice Football - full simulation (v0.4)
-# Distance-based field goal system
+# Gridiron Dice Football - full simulation (v0.5)
+# Distance-based field goal system + Turnovers
 # Author: Synthia + You
 
 import random
@@ -21,6 +21,14 @@ FG_RULES = {
     (21, 30): 4,   # 21-30 yards: 4+ on d6 (50%)
     (31, 40): 5,   # 31-40 yards: 5+ on d6 (33.3%)
     (41, 50): 6,   # 41-50 yards: 6 on d6 (16.7%)
+}
+
+# Turnover Rules (roll d20 for each drive)
+# Style -> Turnover on these rolls
+TURNOVER_THRESHOLDS = {
+    "run": [0],           # 5% turnover rate
+    "balanced": [0, 1],   # 10% turnover rate
+    "pass": [0, 1, 2],    # 15% turnover rate
 }
 
 # -----------------------------
@@ -107,6 +115,14 @@ def attempt_field_goal(team: str, x: int) -> bool:
     # Roll d6 and check if >= required roll
     roll = random.randint(1, 6)
     return roll >= required_roll
+
+def check_turnover(style: str) -> bool:
+    """
+    Roll d20 to check for turnover based on play style.
+    Returns True if turnover occurs.
+    """
+    turnover_roll = random.randint(0, 19)
+    return turnover_roll in TURNOVER_THRESHOLDS[style]
 
 def punt_spot(offense: str, x: int) -> int:
     # Punt goes 40 toward opponent goal; touchback puts receiving team at their 20
@@ -204,6 +220,9 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
     roll = random.randint(0, 19)
     y, t = TABLES[style][roll]
 
+    # Roll for turnover
+    turnover_occurred = check_turnover(style)
+
     # If TD row:
     if y == "TD":
         yards_needed = yards_to_endzone(team, x)
@@ -216,10 +235,20 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
             end_x = advance(team, x, adj_y)
             # Check: is adjusted yardage a TD? Our non-TD rows are numeric yards only.
             if is_td_yardage(team, end_x):
+                # Check for turnover
+                if turnover_occurred:
+                    opponent_20 = 20 if opponent == "Bombers" else 80
+                    log = DriveLog(half, team, x, style, roll, adj_y, adj_t, opponent_20, "Turnover (late-half, would be TD)", 0)
+                    return log, blocks_left, opponent, kickoff_position(opponent)
                 # TD and end half immediately
                 log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "TD (late-half adj)", 7)
+                score[team] += 7
                 return log, blocks_left, opponent, kickoff_position(opponent)  # half ends by caller when it sees 0 left
-            # Not TD; if FG range, allow FG attempt as the final action:
+            # Not TD; check for turnover first
+            if turnover_occurred:
+                log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Turnover (late-half)", 0)
+                return log, blocks_left, opponent, kickoff_position(opponent)
+            # if FG range, allow FG attempt as the final action:
             if within_fg_range(team, end_x):
                 fg_good = attempt_field_goal(team, end_x)
                 if fg_good:
@@ -236,7 +265,16 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
 
         # TD fits in time:
         end_x = 100 if team == "Bombers" else 0
-        log = DriveLog(half, team, x, style, roll, yards_to_endzone(team, x), time_spent, end_x, "TD", 7)
+        yards_gained = yards_to_endzone(team, x)
+
+        # Check for turnover
+        if turnover_occurred:
+            # Turnover on TD: opponent gets ball at their 20
+            opponent_20 = 20 if opponent == "Bombers" else 80
+            log = DriveLog(half, team, x, style, roll, yards_gained, time_spent, opponent_20, "Turnover (would be TD)", 0)
+            return log, time_spent, opponent, opponent_20
+
+        log = DriveLog(half, team, x, style, roll, yards_gained, time_spent, end_x, "TD", 7)
         score[team] += 7
         return log, time_spent, opponent, kickoff_position(opponent)
 
@@ -251,9 +289,18 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
         end_x = advance(team, x, adj_y)
         # If adjusted row reaches TD:
         if is_td_yardage(team, end_x):
+            # Check for turnover
+            if turnover_occurred:
+                opponent_20 = 20 if opponent == "Bombers" else 80
+                log = DriveLog(half, team, x, style, roll, adj_y, adj_t, opponent_20, "Turnover (late-half, would be TD)", 0)
+                return log, blocks_left, opponent, kickoff_position(opponent)
             log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "TD (late-half adj)", 7)
             score[team] += 7
             return log, blocks_left, opponent, kickoff_position(opponent)  # half ends
+        # Check for turnover before FG/punt
+        if turnover_occurred:
+            log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Turnover (late-half)", 0)
+            return log, blocks_left, opponent, kickoff_position(opponent)
         # Else if FG range, allow final FG and end half:
         if within_fg_range(team, end_x):
             fg_good = attempt_field_goal(team, end_x)
@@ -278,12 +325,26 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
         yards_needed = yards_to_endzone(team, x)
         td_time = roll_time_for_td(style, yards_needed)
         time_spent = min(time_spent, td_time)
-        end_x = 100 if team == "Bombers" else 0
-        log = DriveLog(half, team, x, style, roll, yards_needed, time_spent, end_x, "TD (by yardage)", 7)
+        end_x_td = 100 if team == "Bombers" else 0
+
+        # Check for turnover
+        if turnover_occurred:
+            # Turnover on TD: opponent gets ball at their 20
+            opponent_20 = 20 if opponent == "Bombers" else 80
+            log = DriveLog(half, team, x, style, roll, yards_needed, time_spent, opponent_20, "Turnover (would be TD)", 0)
+            return log, time_spent, opponent, opponent_20
+
+        log = DriveLog(half, team, x, style, roll, yards_needed, time_spent, end_x_td, "TD (by yardage)", 7)
         score[team] += 7
         return log, time_spent, opponent, kickoff_position(opponent)
 
     # No TD: decide FG or Punt
+    # Check for turnover first
+    if turnover_occurred:
+        # Turnover: opponent gets ball at current spot
+        log = DriveLog(half, team, x, style, roll, yards, time_spent, end_x, "Turnover", 0)
+        return log, time_spent, opponent, end_x
+
     if within_fg_range(team, end_x):
         fg_good = attempt_field_goal(team, end_x)
         if fg_good:
