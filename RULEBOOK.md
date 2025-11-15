@@ -68,7 +68,7 @@ The offensive team chooses one of three play styles:
 
 **PASS-FIRST** - Aggressive passing attack
 - Highest yardage potential
-- 15% turnover risk (riskiest)
+- 20% turnover risk (riskiest)
 - Lowest time consumption
 
 ### Step 2: Roll for Drive Outcome
@@ -165,7 +165,7 @@ The result shows:
 
 - **Balanced**: Turnover on rolls **1-2** (10% chance)
 - **Run-First**: Turnover on roll **1** only (5% chance)
-- **Pass-First**: Turnover on rolls **1-3** (15% chance)
+- **Pass-First**: Turnover on rolls **1-4** (20% chance)
 
 **If a turnover occurs:**
 - The drive ends immediately
@@ -400,7 +400,7 @@ After scoring (TD or FG) or safety:
 ### Turnover Thresholds
 - **Run**: 1 (5%)
 - **Balanced**: 1-2 (10%)
-- **Pass**: 1-3 (15%)
+- **Pass**: 1-4 (20%)
 
 ### Field Goal Range
 - Within **50 yards** of opponent's goal line

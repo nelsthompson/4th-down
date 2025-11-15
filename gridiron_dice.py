@@ -16,9 +16,9 @@ SEED = None  # set to an int for reproducible runs
 # Turnover Rules (roll d20 1-20 for each drive)
 # Style -> Turnover on these rolls
 TURNOVER_THRESHOLDS = {
-    "run": [1],           # 5% turnover rate
-    "balanced": [1, 2],   # 10% turnover rate
-    "pass": [1, 2, 3],    # 15% turnover rate
+    "run": [1],              # 5% turnover rate
+    "balanced": [1, 2],      # 10% turnover rate
+    "pass": [1, 2, 3, 4],    # 20% turnover rate
 }
 
 # 4th Down Rules

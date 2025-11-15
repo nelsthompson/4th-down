@@ -49,7 +49,7 @@ Quick reference charts for gameplay. Print this page for easy access during play
 ---
 
 ### PASS-FIRST OFFENSE
-**Turnover on rolls:** 1-3 (15% chance)
+**Turnover on rolls:** 1-4 (20% chance)
 
 | Roll | Yards | Time | Roll | Yards | Time |
 |------|-------|------|------|-------|------|
@@ -155,7 +155,7 @@ Roll d20 (1-20) when attempting field goal:
 |------------|----------------|--------|
 | Run-First  | 1              | 5%     |
 | Balanced   | 1-2            | 10%    |
-| Pass-First | 1-3            | 15%    |
+| Pass-First | 1-4            | 20%    |
 
 **If turnover occurs:**
 - Drive ends immediately, no punt/FG
