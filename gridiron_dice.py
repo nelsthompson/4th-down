@@ -65,6 +65,12 @@ TABLES = {
     "pass": PASS_FIRST,
 }
 
+# 4th down conversion table (d20, 0-19)
+FOURTH_DOWN_CONVERSION = [
+    -10, -5, 0, 1, 1, 2, 2, 3, 3, 4,
+    4, 5, 6, 7, 8, 10, 14, 20, 30, "TD"
+]
+
 STYLES = ("balanced", "run", "pass")
 
 # -----------------------------
@@ -199,28 +205,35 @@ def should_go_for_it(team: str, x: int, score: Dict[str, int], blocks_left: int,
 
 def attempt_fourth_down(team: str, x: int, yards_to_go: int) -> tuple:
     """
-    Attempt a 4th down conversion.
-    Returns: (success: bool, yards_gained: int, is_td: bool)
+    Attempt a 4th down conversion using the d20 conversion table.
+    Returns: (success: bool, yards_gained: int/str, is_td: bool, new_x: int, is_first_down: bool)
     """
-    # Impossible to convert if 11+ yards to go
-    if yards_to_go >= 11:
-        return False, 0, False, x
+    # Roll d20 for attempt (0-19)
+    attempt_roll = random.randint(0, 19)
+    result = FOURTH_DOWN_CONVERSION[attempt_roll]
 
-    # Roll d10 for attempt (1-10)
-    attempt_roll = random.randint(1, 10)
+    # Handle TD result
+    if result == "TD":
+        # Automatic touchdown
+        end_x = 100 if team == "Bombers" else 0
+        yards_gained = yards_to_endzone(team, x)
+        return True, yards_gained, True, end_x, False
 
-    # Success if roll > yards to go
-    success = attempt_roll > yards_to_go
+    # Numeric yards result
+    yards_gained = result
+    new_x = advance(team, x, yards_gained)
 
-    if success:
-        yards_gained = attempt_roll
-        # Check if it reaches the end zone
-        new_x = advance(team, x, yards_gained)
-        is_td = is_td_yardage(team, new_x)
-        return True, yards_gained, is_td, new_x
+    # Check if yards gained reaches end zone
+    if is_td_yardage(team, new_x):
+        return True, yards_gained, True, new_x, False
+
+    # Check for first down (yards_gained >= yards_to_go)
+    if yards_gained >= yards_to_go:
+        # Successful conversion - first down, continue drive
+        return True, yards_gained, False, new_x, True
     else:
         # Failed conversion - turnover on downs
-        return False, 0, False, x
+        return False, yards_gained, False, new_x, False
 
 def punt_spot(offense: str, x: int) -> int:
     # Punt goes 40 toward opponent goal; touchback puts receiving team at their 20
@@ -467,27 +480,25 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
 
     if go_for_it:
         # Attempt 4th down conversion
-        success, yards_gained, is_td_conv, new_x = attempt_fourth_down(team, end_x, yards_to_go)
+        success, yards_gained, is_td, new_x, is_first_down = attempt_fourth_down(team, end_x, yards_to_go)
 
-        if success:
-            if is_td_conv:
-                # Successful 4th down conversion for TD
-                end_x_td = 100 if team == "Bombers" else 0
-                result_str = f"4th down conversion TD ({'goal' if is_4th_and_goal else yards_to_go})"
-                log = DriveLog(half, team, x, style, roll, yards, time_spent, end_x_td, result_str, 7)
-                score[team] += 7
-                return log, time_spent, opponent, kickoff_position(opponent)
-            else:
-                # Successful 4th down conversion, drive continues
-                result_str = f"4th down conversion ({'goal' if is_4th_and_goal else yards_to_go})"
-                log = DriveLog(half, team, x, style, roll, yards, time_spent, new_x, result_str, 0)
-                # Same team keeps ball at new position for fresh drive
-                return log, time_spent, team, new_x
+        if is_td:
+            # Touchdown on 4th down attempt
+            result_str = f"4th down conversion TD ({'goal' if is_4th_and_goal else yards_to_go})"
+            log = DriveLog(half, team, x, style, roll, yards, time_spent, new_x, result_str, 7)
+            score[team] += 7
+            return log, time_spent, opponent, kickoff_position(opponent)
+        elif is_first_down:
+            # Successful conversion - first down, drive continues with new style
+            result_str = f"4th down conversion ({'goal' if is_4th_and_goal else yards_to_go})"
+            log = DriveLog(half, team, x, style, roll, yards, time_spent, new_x, result_str, 0)
+            # Same team keeps ball at new position for fresh drive
+            return log, time_spent, team, new_x
         else:
             # Failed 4th down conversion - turnover on downs
             result_str = f"4th down failed ({'goal' if is_4th_and_goal else yards_to_go})"
-            log = DriveLog(half, team, x, style, roll, yards, time_spent, end_x, result_str, 0)
-            return log, time_spent, opponent, end_x
+            log = DriveLog(half, team, x, style, roll, yards, time_spent, new_x, result_str, 0)
+            return log, time_spent, opponent, new_x
 
     # Not going for it - normal FG/Punt decision
     if within_fg_range(team, end_x):
