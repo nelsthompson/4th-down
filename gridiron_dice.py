@@ -1,5 +1,5 @@
-# Gridiron Dice Football - full simulation (v0.5)
-# Distance-based field goal system + Turnovers
+# Gridiron Dice Football - full simulation (v0.6)
+# Distance-based field goals + Turnovers + 4th Down Conversions
 # Author: Synthia + You
 
 import random
@@ -30,6 +30,10 @@ TURNOVER_THRESHOLDS = {
     "balanced": [0, 1],   # 10% turnover rate
     "pass": [0, 1, 2],    # 15% turnover rate
 }
+
+# 4th Down Rules
+# Roll d10 (1-10) for yards to go
+# If going for it, roll d10 again - succeed if roll > yards to go
 
 # -----------------------------
 # Drive tables
@@ -123,6 +127,85 @@ def check_turnover(style: str) -> bool:
     """
     turnover_roll = random.randint(0, 19)
     return turnover_roll in TURNOVER_THRESHOLDS[style]
+
+def should_go_for_it(team: str, x: int, score: Dict[str, int], blocks_left: int, half: int) -> bool:
+    """
+    AI decision: should the team go for it on 4th down?
+    Considers game situation, field position, and score.
+    """
+    opponent = "Gunners" if team == "Bombers" else "Bombers"
+    lead = score[team] - score[opponent]
+    distance_to_goal = yards_to_endzone(team, x)
+
+    # Roll d10 for yards to go (1-10)
+    yards_to_go = random.randint(1, 10)
+
+    # If yards to go >= distance to goal, it's 4th and goal
+    if yards_to_go >= distance_to_goal:
+        yards_to_go = distance_to_goal
+        fourth_and_goal = True
+    else:
+        fourth_and_goal = False
+
+    # Base probability to go for it
+    go_for_it_prob = 0.0
+
+    # 4th and goal situations - more aggressive
+    if fourth_and_goal:
+        if distance_to_goal <= 3:
+            go_for_it_prob = 0.60  # Very likely on 4th and goal from 3 or less
+        elif distance_to_goal <= 5:
+            go_for_it_prob = 0.40
+        else:
+            go_for_it_prob = 0.20
+    else:
+        # 4th and short
+        if yards_to_go <= 3:
+            go_for_it_prob = 0.30
+        elif yards_to_go <= 5:
+            go_for_it_prob = 0.15
+        else:
+            go_for_it_prob = 0.05
+
+    # Adjust based on field position
+    if distance_to_goal <= 20:  # In opponent's red zone
+        go_for_it_prob += 0.15
+    elif distance_to_goal <= 40:  # In opponent's territory
+        go_for_it_prob += 0.05
+
+    # Adjust based on game situation
+    if half == 2:  # Second half
+        if blocks_left <= 30:  # Last 5 minutes
+            if lead < -3:  # Trailing by more than a field goal
+                go_for_it_prob += 0.30
+            elif lead < 0:  # Trailing
+                go_for_it_prob += 0.15
+            elif lead <= 7:  # Close game
+                go_for_it_prob += 0.05
+
+    # Random decision based on probability
+    return random.random() < go_for_it_prob, yards_to_go, fourth_and_goal
+
+def attempt_fourth_down(team: str, x: int, yards_to_go: int) -> tuple:
+    """
+    Attempt a 4th down conversion.
+    Returns: (success: bool, yards_gained: int, is_td: bool)
+    """
+    # Roll d10 for attempt (1-10)
+    attempt_roll = random.randint(1, 10)
+
+    # Success if roll > yards to go
+    success = attempt_roll > yards_to_go
+
+    if success:
+        yards_gained = attempt_roll
+        # Check if it reaches the end zone
+        new_x = advance(team, x, yards_gained)
+        is_td = is_td_yardage(team, new_x)
+        return True, yards_gained, is_td, new_x
+    else:
+        # Failed conversion - turnover on downs
+        return False, 0, False, x
 
 def punt_spot(offense: str, x: int) -> int:
     # Punt goes 40 toward opponent goal; touchback puts receiving team at their 20
@@ -338,13 +421,41 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
         score[team] += 7
         return log, time_spent, opponent, kickoff_position(opponent)
 
-    # No TD: decide FG or Punt
+    # No TD: decide FG, Punt, or 4th down attempt
     # Check for turnover first
     if turnover_occurred:
         # Turnover: opponent gets ball at current spot
         log = DriveLog(half, team, x, style, roll, yards, time_spent, end_x, "Turnover", 0)
         return log, time_spent, opponent, end_x
 
+    # 4th down decision
+    go_for_it, yards_to_go, is_4th_and_goal = should_go_for_it(team, end_x, score, blocks_left, half)
+
+    if go_for_it:
+        # Attempt 4th down conversion
+        success, yards_gained, is_td_conv, new_x = attempt_fourth_down(team, end_x, yards_to_go)
+
+        if success:
+            if is_td_conv:
+                # Successful 4th down conversion for TD
+                end_x_td = 100 if team == "Bombers" else 0
+                result_str = f"4th down conversion TD ({'goal' if is_4th_and_goal else yards_to_go})"
+                log = DriveLog(half, team, x, style, roll, yards, time_spent, end_x_td, result_str, 7)
+                score[team] += 7
+                return log, time_spent, opponent, kickoff_position(opponent)
+            else:
+                # Successful 4th down conversion, drive continues
+                result_str = f"4th down conversion ({'goal' if is_4th_and_goal else yards_to_go})"
+                log = DriveLog(half, team, x, style, roll, yards, time_spent, new_x, result_str, 0)
+                # Same team keeps ball at new position for fresh drive
+                return log, time_spent, team, new_x
+        else:
+            # Failed 4th down conversion - turnover on downs
+            result_str = f"4th down failed ({'goal' if is_4th_and_goal else yards_to_go})"
+            log = DriveLog(half, team, x, style, roll, yards, time_spent, end_x, result_str, 0)
+            return log, time_spent, opponent, end_x
+
+    # Not going for it - normal FG/Punt decision
     if within_fg_range(team, end_x):
         fg_good = attempt_field_goal(team, end_x)
         if fg_good:

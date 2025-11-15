@@ -139,6 +139,18 @@ Roll a d20 (0-19) and consult the table for your chosen play style.
   - **Pass-first:** Turnover on 0-2 (15% chance)
   - **Effect:** No punt/FG, opponent gets ball at current spot
   - **If TD:** TD negated, opponent gets ball at their 20
+- **4th Down Conversions:**
+  - **After each non-TD drive:** Roll d10 (1-10) for yards to go
+  - **If yards to go ≥ distance to goal:** It's 4th and goal
+  - **AI Decision:** Team decides whether to go for it based on:
+    - Field position (more likely near goal)
+    - Yards to go (more likely on 4th and short)
+    - Game situation (trailing, late game)
+  - **If going for it:** Roll d10 again
+    - **Success if roll > yards to go:** Move ball forward by roll amount
+    - **If reaches goal line:** Touchdown (7 points)
+    - **Otherwise:** Same team starts fresh drive from new position
+    - **If unsuccessful:** Turnover on downs (opponent gets ball)
 
 ### TD Time Cap Rule
 When you roll a TD or gain enough yards to reach the end zone:
