@@ -13,12 +13,12 @@ BLOCKS_PER_HALF = 180  # 30 minutes, 10 sec per block
 PUNT_YARDS = 40
 SEED = None  # set to an int for reproducible runs
 
-# Turnover Rules (roll d20 for each drive)
+# Turnover Rules (roll d20 1-20 for each drive)
 # Style -> Turnover on these rolls
 TURNOVER_THRESHOLDS = {
-    "run": [0],           # 5% turnover rate
-    "balanced": [0, 1],   # 10% turnover rate
-    "pass": [0, 1, 2],    # 15% turnover rate
+    "run": [1],           # 5% turnover rate
+    "balanced": [1, 2],   # 10% turnover rate
+    "pass": [1, 2, 3],    # 15% turnover rate
 }
 
 # 4th Down Rules
@@ -27,9 +27,10 @@ TURNOVER_THRESHOLDS = {
 
 # -----------------------------
 # Drive tables
-# Each entry is (yards, time_blocks) for rolls 0..19
+# Each entry is (yards, time_blocks) for rolls 1-20
 # Yards can be "TD" and time may be "1-20" for TD results.
 # These match the CSV you asked me to generate.
+# Tables are 0-indexed, so roll 1 uses index 0, roll 20 uses index 19
 # -----------------------------
 BALANCED = [
     (-10,4),(0,5),(3,6),(5,6),(6,7),(7,8),(9,9),(12,10),
@@ -55,13 +56,15 @@ TABLES = {
     "pass": PASS_FIRST,
 }
 
-# 4th down conversion table (d20, 0-19)
+# 4th down conversion table (d20, 1-20)
+# Table is 0-indexed, so roll 1 uses index 0, roll 20 uses index 19
 FOURTH_DOWN_CONVERSION = [
     -10, -5, 0, 1, 1, 2, 2, 3, 3, 4,
     4, 5, 6, 7, 8, 10, 14, 20, 30, "TD"
 ]
 
-# Field goal make distance table (d20, 0-19)
+# Field goal make distance table (d20, 1-20)
+# Table is 0-indexed, so roll 1 uses index 0, roll 20 uses index 19
 FIELD_GOAL_DISTANCE = [
     0, 15, 20, 25, 30, 30, 30, 30, 30, 35,
     35, 35, 35, 40, 40, 40, 40, 45, 45, 45
@@ -108,13 +111,13 @@ def attempt_field_goal(team: str, x: int) -> bool:
     """
     Attempt a field goal using d20 make distance table.
     Returns True if successful, False if missed.
-    Roll d20, if result >= yards to goal line, FG is good.
+    Roll d20 (1-20), if result >= yards to goal line, FG is good.
     """
     distance = yards_to_endzone(team, x)
 
-    # Roll d20 (0-19) and look up make distance
-    roll = random.randint(0, 19)
-    make_distance = FIELD_GOAL_DISTANCE[roll]
+    # Roll d20 (1-20) and look up make distance
+    roll = random.randint(1, 20)
+    make_distance = FIELD_GOAL_DISTANCE[roll - 1]
 
     # FG is good if make distance >= actual distance
     return make_distance >= distance
@@ -147,23 +150,23 @@ def attempt_extra_point(team: str, score: Dict[str, int], blocks_left: int, half
             go_for_two = random.random() < 0.20  # 20% chance, prefer safer 1pt
 
     if go_for_two:
-        # Two-point conversion: d10 (0-9), success on 6+
-        roll = random.randint(0, 9)
-        success = roll >= 6
+        # Two-point conversion: d10 (1-10), success on 7+
+        roll = random.randint(1, 10)
+        success = roll >= 7
         return (2 if success else 0), "2pt"
     else:
         # One-point conversion: use FG table, success if make distance >= 15
-        roll = random.randint(0, 19)
-        make_distance = FIELD_GOAL_DISTANCE[roll]
+        roll = random.randint(1, 20)
+        make_distance = FIELD_GOAL_DISTANCE[roll - 1]
         success = make_distance >= 15
         return (1 if success else 0), "1pt"
 
 def check_turnover(style: str) -> bool:
     """
-    Roll d20 to check for turnover based on play style.
+    Roll d20 (1-20) to check for turnover based on play style.
     Returns True if turnover occurs.
     """
-    turnover_roll = random.randint(0, 19)
+    turnover_roll = random.randint(1, 20)
     return turnover_roll in TURNOVER_THRESHOLDS[style]
 
 def should_go_for_it(team: str, x: int, score: Dict[str, int], blocks_left: int, half: int, style: str) -> bool:
@@ -236,9 +239,9 @@ def attempt_fourth_down(team: str, x: int, yards_to_go: int) -> tuple:
     Attempt a 4th down conversion using the d20 conversion table.
     Returns: (success: bool, yards_gained: int/str, is_td: bool, new_x: int, is_first_down: bool)
     """
-    # Roll d20 for attempt (0-19)
-    attempt_roll = random.randint(0, 19)
-    result = FOURTH_DOWN_CONVERSION[attempt_roll]
+    # Roll d20 for attempt (1-20)
+    attempt_roll = random.randint(1, 20)
+    result = FOURTH_DOWN_CONVERSION[attempt_roll - 1]
 
     # Handle TD result
     if result == "TD":
@@ -355,9 +358,9 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
     Returns: (DriveLog, blocks_spent, next_possession_team, next_start_x)
     If next_possession_team is None, same team continues (shouldn't happen in this possession-based design).
     """
-    # Roll 1d20 on the chosen table
-    roll = random.randint(0, 19)
-    y, t = TABLES[style][roll]
+    # Roll 1d20 (1-20) on the chosen table
+    roll = random.randint(1, 20)
+    y, t = TABLES[style][roll - 1]
 
     # Roll for turnover
     turnover_occurred = check_turnover(style)

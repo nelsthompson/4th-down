@@ -10,11 +10,13 @@ Score more points than your opponent by moving the ball down the field and scori
 
 ## Materials Needed
 
-- **2 twenty-sided dice (d20)** numbered 0-19
-- **1 ten-sided die (d10)** numbered 0-9
+- **2 twenty-sided dice (d20)** numbered 1-20
+- **1 ten-sided die (d10)** numbered 1-10
 - **1 eight-sided die (d8)** numbered 1-8
 - **Paper and pencil** for tracking field position, score, and time
 - **This rulebook** with the drive outcome tables
+
+**NOTE:** All dice use standard numbering (1 to max), making physical dice easy to use!
 
 ## Setup
 
@@ -71,7 +73,7 @@ The offensive team chooses one of three play styles:
 
 ### Step 2: Roll for Drive Outcome
 
-**Roll a d20 (0-19)** and consult the appropriate table below for your chosen play style.
+**Roll a d20 (1-20)** and consult the appropriate table below for your chosen play style.
 
 The result shows:
 - **Yards gained** (or lost, if negative)
@@ -81,76 +83,76 @@ The result shows:
 
 | Roll | Yards | Time |
 |------|-------|------|
-| 0    | -10   | 4    |
-| 1    | 0     | 5    |
-| 2    | 3     | 6    |
-| 3    | 5     | 6    |
-| 4    | 6     | 7    |
-| 5    | 7     | 8    |
-| 6    | 9     | 9    |
-| 7    | 12    | 10   |
-| 8    | 15    | 11   |
-| 9    | 18    | 18   |
-| 10   | 25    | 19   |
-| 11   | 32    | 22   |
-| 12   | 38    | 26   |
-| 13   | 45    | 31   |
-| 14   | 55    | 34   |
-| 15   | 68    | 38   |
-| 16   | 80    | 40   |
-| 17   | TD    | 1-20 |
+| 1    | -10   | 4    |
+| 2    | 0     | 5    |
+| 3    | 3     | 6    |
+| 4    | 5     | 6    |
+| 5    | 6     | 7    |
+| 6    | 7     | 8    |
+| 7    | 9     | 9    |
+| 8    | 12    | 10   |
+| 9    | 15    | 11   |
+| 10   | 18    | 18   |
+| 11   | 25    | 19   |
+| 12   | 32    | 22   |
+| 13   | 38    | 26   |
+| 14   | 45    | 31   |
+| 15   | 55    | 34   |
+| 16   | 68    | 38   |
+| 17   | 80    | 40   |
 | 18   | TD    | 1-20 |
 | 19   | TD    | 1-20 |
+| 20   | TD    | 1-20 |
 
 #### RUN-FIRST OFFENSE TABLE
 
 | Roll | Yards | Time |
 |------|-------|------|
-| 0    | -2    | 12   |
-| 1    | 0     | 12   |
-| 2    | 2     | 12   |
-| 3    | 3     | 12   |
-| 4    | 4     | 12   |
-| 5    | 6     | 12   |
-| 6    | 8     | 12   |
-| 7    | 10    | 15   |
-| 8    | 12    | 17   |
-| 9    | 15    | 18   |
-| 10   | 18    | 20   |
-| 11   | 22    | 22   |
-| 12   | 26    | 24   |
-| 13   | 30    | 27   |
-| 14   | 34    | 32   |
-| 15   | 38    | 35   |
-| 16   | 42    | 38   |
-| 17   | 60    | 40   |
-| 18   | 90    | 45   |
-| 19   | TD    | 1-20 |
+| 1    | -2    | 12   |
+| 2    | 0     | 12   |
+| 3    | 2     | 12   |
+| 4    | 3     | 12   |
+| 5    | 4     | 12   |
+| 6    | 6     | 12   |
+| 7    | 8     | 12   |
+| 8    | 10    | 15   |
+| 9    | 12    | 17   |
+| 10   | 15    | 18   |
+| 11   | 18    | 20   |
+| 12   | 22    | 22   |
+| 13   | 26    | 24   |
+| 14   | 30    | 27   |
+| 15   | 34    | 32   |
+| 16   | 38    | 35   |
+| 17   | 42    | 38   |
+| 18   | 60    | 40   |
+| 19   | 90    | 45   |
+| 20   | TD    | 1-20 |
 
 #### PASS-FIRST OFFENSE TABLE
 
 | Roll | Yards | Time |
 |------|-------|------|
-| 0    | -10   | 2    |
-| 1    | -5    | 3    |
-| 2    | 0     | 4    |
-| 3    | 5     | 4    |
-| 4    | 8     | 5    |
-| 5    | 12    | 6    |
-| 6    | 15    | 7    |
-| 7    | 18    | 8    |
-| 8    | 22    | 9    |
-| 9    | 28    | 12   |
-| 10   | 35    | 15   |
-| 11   | 42    | 17   |
-| 12   | 50    | 20   |
-| 13   | 60    | 24   |
-| 14   | 70    | 29   |
-| 15   | 80    | 36   |
-| 16   | 90    | 40   |
-| 17   | TD    | 1-20 |
+| 1    | -10   | 2    |
+| 2    | -5    | 3    |
+| 3    | 0     | 4    |
+| 4    | 5     | 4    |
+| 5    | 8     | 5    |
+| 6    | 12    | 6    |
+| 7    | 15    | 7    |
+| 8    | 18    | 8    |
+| 9    | 22    | 9    |
+| 10   | 28    | 12   |
+| 11   | 35    | 15   |
+| 12   | 42    | 17   |
+| 13   | 50    | 20   |
+| 14   | 60    | 24   |
+| 15   | 70    | 29   |
+| 16   | 80    | 36   |
+| 17   | 90    | 40   |
 | 18   | TD    | 1-20 |
 | 19   | TD    | 1-20 |
+| 20   | TD    | 1-20 |
 
 **Special Note for TD Results:**
 - If you roll "TD", the time consumed is **1-20** time blocks
@@ -159,11 +161,11 @@ The result shows:
 
 ### Step 3: Check for Turnover
 
-**Roll a second d20 (0-19)** to check for a turnover:
+**Roll a second d20 (1-20)** to check for a turnover:
 
-- **Balanced**: Turnover on rolls **0-1** (10% chance)
-- **Run-First**: Turnover on roll **0** only (5% chance)
-- **Pass-First**: Turnover on rolls **0-2** (15% chance)
+- **Balanced**: Turnover on rolls **1-2** (10% chance)
+- **Run-First**: Turnover on roll **1** only (5% chance)
+- **Pass-First**: Turnover on rolls **1-3** (15% chance)
 
 **If a turnover occurs:**
 - The drive ends immediately
@@ -228,30 +230,30 @@ Players may decide based on game situation, but common guidelines:
 
 #### A) Going For It - 4th Down Conversion
 
-**Roll a d20 (0-19)** and consult this table:
+**Roll a d20 (1-20)** and consult this table:
 
 | Roll | Result |
 |------|--------|
-| 0    | -10    |
-| 1    | -5     |
-| 2    | 0      |
-| 3    | 1      |
+| 1    | -10    |
+| 2    | -5     |
+| 3    | 0      |
 | 4    | 1      |
-| 5    | 2      |
+| 5    | 1      |
 | 6    | 2      |
-| 7    | 3      |
+| 7    | 2      |
 | 8    | 3      |
-| 9    | 4      |
+| 9    | 3      |
 | 10   | 4      |
-| 11   | 5      |
-| 12   | 6      |
-| 13   | 7      |
-| 14   | 8      |
-| 15   | 10     |
-| 16   | 14     |
-| 17   | 20     |
-| 18   | 30     |
-| 19   | TD     |
+| 11   | 4      |
+| 12   | 5      |
+| 13   | 6      |
+| 14   | 7      |
+| 15   | 8      |
+| 16   | 10     |
+| 17   | 14     |
+| 18   | 20     |
+| 19   | 30     |
+| 20   | TD     |
 
 **Resolution:**
 
@@ -275,15 +277,14 @@ Players may decide based on game situation, but common guidelines:
 - If beyond 50 yards, you must punt instead
 
 **Procedure:**
-1. **Roll a d20 (0-19)** and consult this table:
+1. **Roll a d20 (1-20)** and consult this table:
 
 | Roll | Make Distance |
 |------|---------------|
-| 0    | 0 yards       |
-| 1    | 15 yards      |
-| 2    | 20 yards      |
-| 3    | 25 yards      |
-| 4    | 30 yards      |
+| 1    | 0 yards       |
+| 2    | 15 yards      |
+| 3    | 20 yards      |
+| 4    | 25 yards      |
 | 5    | 30 yards      |
 | 6    | 30 yards      |
 | 7    | 30 yards      |
@@ -299,6 +300,7 @@ Players may decide based on game situation, but common guidelines:
 | 17   | 45 yards      |
 | 18   | 45 yards      |
 | 19   | 45 yards      |
+| 20   | 45 yards      |
 
 2. Compare the **Make Distance** to the actual distance to the goal line
 
@@ -328,14 +330,14 @@ When a team scores a touchdown, they immediately attempt an extra point conversi
 The scoring team must choose:
 
 **1-POINT CONVERSION** (Safer - ~85% success rate)
-- Roll a d20 (0-19) on the Field Goal table above
+- Roll a d20 (1-20) on the Field Goal table above
 - **Success if Make Distance ≥ 15 yards**
 - Success = 7 points total (6 + 1)
 - Failure = 6 points total
 
 **2-POINT CONVERSION** (Riskier - 40% success rate)
-- Roll a d10 (0-9)
-- **Success on 6 or higher**
+- Roll a d10 (1-10)
+- **Success on 7 or higher**
 - Success = 8 points total (6 + 2)
 - Failure = 6 points total
 
@@ -396,9 +398,9 @@ After scoring (TD or FG) or safety:
 ## Quick Reference
 
 ### Turnover Thresholds
-- **Run**: 0 (5%)
-- **Balanced**: 0-1 (10%)
-- **Pass**: 0-2 (15%)
+- **Run**: 1 (5%)
+- **Balanced**: 1-2 (10%)
+- **Pass**: 1-3 (15%)
 
 ### Field Goal Range
 - Within **50 yards** of opponent's goal line
