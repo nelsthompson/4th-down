@@ -128,23 +128,24 @@ def check_turnover(style: str) -> bool:
     turnover_roll = random.randint(0, 19)
     return turnover_roll in TURNOVER_THRESHOLDS[style]
 
-def should_go_for_it(team: str, x: int, score: Dict[str, int], blocks_left: int, half: int, yards_gained: int) -> bool:
+def should_go_for_it(team: str, x: int, score: Dict[str, int], blocks_left: int, half: int, style: str) -> bool:
     """
     AI decision: should the team go for it on 4th down?
     Considers game situation, field position, and score.
-    Uses realistic 4th down distance based on yards gained.
+    Uses style-dependent dice for 4th down distance.
     """
     opponent = "Gunners" if team == "Bombers" else "Bombers"
     lead = score[team] - score[opponent]
     distance_to_goal = yards_to_endzone(team, x)
 
-    # Calculate yards to go based on drive result
-    # If drive gained less than 10 yards, yards to go = 10 - yards gained
-    # Otherwise, roll d10 for random distance
-    if yards_gained < 10:
-        yards_to_go = 10 - yards_gained
-    else:
+    # Calculate yards to go based on play style
+    # Run-first: d8 (1-8), Balanced: d10 (1-10), Pass-first: d20 (1-20)
+    if style == "run":
+        yards_to_go = random.randint(1, 8)
+    elif style == "balanced":
         yards_to_go = random.randint(1, 10)
+    else:  # pass
+        yards_to_go = random.randint(1, 20)
 
     # If yards to go >= distance to goal, it's 4th and goal
     if yards_to_go >= distance_to_goal:
@@ -197,6 +198,10 @@ def attempt_fourth_down(team: str, x: int, yards_to_go: int) -> tuple:
     Attempt a 4th down conversion.
     Returns: (success: bool, yards_gained: int, is_td: bool)
     """
+    # Impossible to convert if 11+ yards to go
+    if yards_to_go >= 11:
+        return False, 0, False, x
+
     # Roll d10 for attempt (1-10)
     attempt_roll = random.randint(1, 10)
 
@@ -435,7 +440,7 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
         return log, time_spent, opponent, end_x
 
     # 4th down decision (only if no turnover)
-    go_for_it, yards_to_go, is_4th_and_goal = should_go_for_it(team, end_x, score, blocks_left, half, yards)
+    go_for_it, yards_to_go, is_4th_and_goal = should_go_for_it(team, end_x, score, blocks_left, half, style)
 
     if go_for_it:
         # Attempt 4th down conversion
