@@ -144,21 +144,20 @@ Roll a d20 (0-19) and consult the table for your chosen play style.
   - **Effect:** No punt/FG, opponent gets ball at current spot
   - **If TD:** TD negated, opponent gets ball at their 20
 - **4th Down Conversions:**
-  - **After each non-TD drive:** Roll for yards to go (style-dependent)
+  - **Yards to go determination:** Roll for yards to go (style-dependent)
     - **Run-first:** d8 (1-8 yards)
     - **Balanced:** d10 (1-10 yards)
     - **Pass-first:** d20 (1-20 yards)
   - **If yards to go ≥ distance to goal:** It's 4th and goal
-  - **If yards to go ≥ 11:** Automatic failure (can't convert 11+ yards)
   - **AI Decision:** Team decides whether to go for it based on:
     - Field position (more likely near goal)
     - Yards to go (more likely on 4th and short)
     - Game situation (trailing, late game)
-  - **If going for it:** Roll d10 for attempt
-    - **Success if roll > yards to go:** Move ball forward by roll amount
-    - **If reaches goal line:** Touchdown (7 points)
-    - **Otherwise:** Same team starts fresh drive from new position
-    - **If unsuccessful:** Turnover on downs (opponent gets ball)
+  - **If going for it:** Roll d20 (0-19) for conversion attempt
+    - **Results:** -10 to 30 yards, or automatic TD
+    - **If 'TD' result or reaches end zone:** Touchdown (7 points), opponent gets ball
+    - **If yards gained ≥ yards to go:** First down! Same team continues with fresh drive/new style
+    - **Otherwise:** Turnover on downs (opponent gets ball)
 
 ### TD Time Cap Rule
 When you roll a TD or gain enough yards to reach the end zone:
