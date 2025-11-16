@@ -118,7 +118,7 @@ async def on_ready():
 
 @bot.tree.command(name="newgame", description="Start a new game of 4th Down")
 @app_commands.describe(opponent="The player you want to play against")
-async def newgame(interaction: discord.Interaction, opponent: discord.Member):
+async def newgame(interaction: discord.Interaction, opponent: discord.User):
     """Start a new game"""
     channel_id = interaction.channel_id
 
@@ -130,8 +130,33 @@ async def newgame(interaction: discord.Interaction, opponent: discord.Member):
         )
         return
 
+    # Convert User to Member (more robust than relying on automatic transformer)
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "⚠️ This command can only be used in a server!",
+            ephemeral=True
+        )
+        return
+
+    opponent_member = interaction.guild.get_member(opponent.id)
+    if opponent_member is None:
+        await interaction.response.send_message(
+            "⚠️ Could not find that user in this server!",
+            ephemeral=True
+        )
+        return
+
+    # Get the player who started the game as a Member
+    player_member = interaction.guild.get_member(interaction.user.id)
+    if player_member is None:
+        await interaction.response.send_message(
+            "⚠️ Could not find you in this server!",
+            ephemeral=True
+        )
+        return
+
     # Can't play against yourself
-    if opponent.id == interaction.user.id:
+    if opponent_member.id == player_member.id:
         await interaction.response.send_message(
             "⚠️ You can't play against yourself!",
             ephemeral=True
@@ -139,7 +164,7 @@ async def newgame(interaction: discord.Interaction, opponent: discord.Member):
         return
 
     # Can't play against bots
-    if opponent.bot:
+    if opponent_member.bot:
         await interaction.response.send_message(
             "⚠️ You can't play against a bot!",
             ephemeral=True
@@ -147,7 +172,7 @@ async def newgame(interaction: discord.Interaction, opponent: discord.Member):
         return
 
     # Create new game
-    game = GameState(channel_id, interaction.user, opponent)
+    game = GameState(channel_id, player_member, opponent_member)
     games[channel_id] = game
 
     # Announce game start
