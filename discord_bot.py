@@ -119,7 +119,7 @@ async def on_ready():
 
 @bot.tree.command(name="newgame", description="Start a new game of 4th Down")
 @app_commands.describe(opponent="The player you want to play against")
-@app_commands.guilds_only()  # Ensure this command only works in servers
+@app_commands.guild_only()  # Ensure this command only works in servers
 async def newgame(interaction: discord.Interaction, opponent: discord.User):
     """Start a new game"""
     channel_id = interaction.channel_id
