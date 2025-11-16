@@ -19,6 +19,7 @@ from gridiron_dice import (
 
 # Bot setup
 intents = discord.Intents.default()
+intents.guilds = True  # Required to see servers
 intents.message_content = True
 intents.members = True  # Required to look up members by name
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -118,6 +119,7 @@ async def on_ready():
 
 @bot.tree.command(name="newgame", description="Start a new game of 4th Down")
 @app_commands.describe(opponent="The player you want to play against")
+@app_commands.guilds_only()  # Ensure this command only works in servers
 async def newgame(interaction: discord.Interaction, opponent: discord.User):
     """Start a new game"""
     channel_id = interaction.channel_id
@@ -130,33 +132,8 @@ async def newgame(interaction: discord.Interaction, opponent: discord.User):
         )
         return
 
-    # Convert User to Member (more robust than relying on automatic transformer)
-    if interaction.guild is None:
-        await interaction.response.send_message(
-            "⚠️ This command can only be used in a server!",
-            ephemeral=True
-        )
-        return
-
-    opponent_member = interaction.guild.get_member(opponent.id)
-    if opponent_member is None:
-        await interaction.response.send_message(
-            "⚠️ Could not find that user in this server!",
-            ephemeral=True
-        )
-        return
-
-    # Get the player who started the game as a Member
-    player_member = interaction.guild.get_member(interaction.user.id)
-    if player_member is None:
-        await interaction.response.send_message(
-            "⚠️ Could not find you in this server!",
-            ephemeral=True
-        )
-        return
-
     # Can't play against yourself
-    if opponent_member.id == player_member.id:
+    if opponent.id == interaction.user.id:
         await interaction.response.send_message(
             "⚠️ You can't play against yourself!",
             ephemeral=True
@@ -164,15 +141,15 @@ async def newgame(interaction: discord.Interaction, opponent: discord.User):
         return
 
     # Can't play against bots
-    if opponent_member.bot:
+    if opponent.bot:
         await interaction.response.send_message(
             "⚠️ You can't play against a bot!",
             ephemeral=True
         )
         return
 
-    # Create new game
-    game = GameState(channel_id, player_member, opponent_member)
+    # Create new game - interaction.user is already a Member in guild context
+    game = GameState(channel_id, interaction.user, opponent)
     games[channel_id] = game
 
     # Announce game start
