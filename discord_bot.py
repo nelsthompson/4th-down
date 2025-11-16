@@ -95,9 +95,37 @@ def get_game(channel_id: int) -> Optional[GameState]:
     return games.get(channel_id)
 
 
+def relative_position(possession: str, field_position: int) -> str:
+    """Convert absolute field position to relative position (+/- from team's perspective)
+
+    Negative = in own territory (yards from own goal line)
+    Positive = in opponent territory (yards from opponent's goal line)
+    """
+    if field_position == 50:
+        return "Midfield"
+
+    if possession == "Bombers":
+        # Bombers go from 0 (their goal) to 100 (opponent's goal)
+        if field_position < 50:
+            # Own territory - show as negative (yards from own goal)
+            return f"-{field_position}"
+        else:
+            # Opponent territory - show as positive (yards from opponent's goal)
+            return f"+{100 - field_position}"
+    else:  # Gunners
+        # Gunners go from 100 (their goal) to 0 (opponent's goal)
+        if field_position > 50:
+            # Own territory - show as negative (yards from own goal)
+            return f"-{100 - field_position}"
+        else:
+            # Opponent territory - show as positive (yards from opponent's goal)
+            return f"+{field_position}"
+
+
 def format_field_position(game: GameState) -> str:
     """Create a visual field position indicator"""
     pos = game.field_position
+    rel_pos = relative_position(game.possession, pos)
 
     # Create a simple field diagram
     if game.possession == "Bombers":
@@ -107,7 +135,7 @@ def format_field_position(game: GameState) -> str:
         marker = "←🏈"
         goal_info = f"{pos} yards to goal"
 
-    return f"**Field Position:** {marker} {pos}-yard line ({goal_info})"
+    return f"**Field Position:** {marker} {rel_pos} ({goal_info})"
 
 
 @bot.event
@@ -158,7 +186,7 @@ async def newgame(interaction: discord.Interaction, opponent: discord.User):
     embed.add_field(name="Time", value=game.format_time(), inline=True)
     embed.add_field(
         name="Kickoff",
-        value=f"{game.possession} receive at the 30-yard line",
+        value=f"{game.possession} receive at -30",
         inline=False
     )
     embed.add_field(
@@ -255,7 +283,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
             embed.add_field(name="Result", value="❌ **TURNOVER!**", inline=True)
             embed.add_field(
                 name="Outcome",
-                value=f"Would have been a TD, but turnover! {opponent} gets ball at their 20.",
+                value=f"Would have been a TD, but turnover! {opponent} gets ball at -20.",
                 inline=False
             )
 
@@ -267,7 +295,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
             embed.add_field(name="Time", value=game.format_time(), inline=True)
             embed.add_field(
                 name="Next",
-                value=f"{game.current_player_with_team()}'s turn at the 20.\nChoose: `/balanced` | `/run` | `/pass`",
+                value=f"{game.current_player_with_team()}'s turn at -20.\nChoose: `/balanced` | `/run` | `/pass`",
                 inline=False
             )
         else:
@@ -314,7 +342,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
             embed.add_field(name="Time", value=game.format_time(), inline=True)
             embed.add_field(
                 name="Next",
-                value=f"{game.current_player_with_team()}'s turn at the 30.\nChoose: `/balanced` | `/run` | `/pass`",
+                value=f"{game.current_player_with_team()}'s turn at -30.\nChoose: `/balanced` | `/run` | `/pass`",
                 inline=False
             )
         else:
@@ -327,7 +355,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                     embed.add_field(name="Result", value="❌ **TURNOVER!**", inline=True)
                     embed.add_field(
                         name="Outcome",
-                        value=f"Would have been a TD, but turnover! {opponent} gets ball at their 20.",
+                        value=f"Would have been a TD, but turnover! {opponent} gets ball at -20.",
                         inline=False
                     )
 
@@ -342,7 +370,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                     embed.add_field(name="Result", value="❌ **TURNOVER!**", inline=True)
                     embed.add_field(
                         name="Outcome",
-                        value=f"{opponent} gets ball at the {end_x}-yard line.",
+                        value=f"{opponent} gets ball at {relative_position(opponent, end_x)}.",
                         inline=False
                     )
 
@@ -533,7 +561,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
             )
         else:
             embed.add_field(name="Outcome", value=f"❌ **TURNOVER ON DOWNS**", inline=False)
-            embed.add_field(name="Result", value=f"{opponent} gets ball at {new_x}-yard line", inline=False)
+            embed.add_field(name="Result", value=f"{opponent} gets ball at {relative_position(opponent, new_x)}", inline=False)
 
             game.switch_possession(opponent, new_x)
 
@@ -570,7 +598,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
             embed.add_field(name="Time", value=game.format_time(), inline=True)
             embed.add_field(
                 name="Kickoff",
-                value=f"{opponent} receives at the 30.",
+                value=f"{opponent} receives at -30.",
                 inline=False
             )
             embed.add_field(
@@ -581,7 +609,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
         else:
             miss_spot = missed_fg_spot(game.possession, game.field_position)
             embed.add_field(name="Result", value="❌ **FIELD GOAL MISS**", inline=False)
-            embed.add_field(name="Ball Placement", value=f"{opponent} gets ball at {miss_spot}-yard line", inline=False)
+            embed.add_field(name="Ball Placement", value=f"{opponent} gets ball at {relative_position(opponent, miss_spot)}", inline=False)
 
             game.switch_possession(opponent, miss_spot)
 
@@ -596,7 +624,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
     else:  # punt
         spot = punt_spot(game.possession, game.field_position)
         embed.add_field(name="Result", value="📤 **PUNT**", inline=False)
-        embed.add_field(name="Ball Placement", value=f"{opponent} gets ball at {spot}-yard line", inline=False)
+        embed.add_field(name="Ball Placement", value=f"{opponent} gets ball at {relative_position(opponent, spot)}", inline=False)
 
         game.switch_possession(opponent, spot)
 
@@ -719,7 +747,7 @@ async def end_half(channel, game: GameState):
 
         embed.add_field(
             name="Second Half Kickoff",
-            value=f"{second_half_receiver} receive at the 30.",
+            value=f"{second_half_receiver} receive at -30.",
             inline=False
         )
         embed.add_field(
