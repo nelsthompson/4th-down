@@ -20,6 +20,7 @@ from gridiron_dice import (
 # Bot setup
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True  # Required to look up members by name
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Game state storage: channel_id -> game_state
