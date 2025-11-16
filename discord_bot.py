@@ -64,6 +64,10 @@ class GameState:
         """Get the opponent player"""
         return self.gunners_player if self.possession == "Bombers" else self.bombers_player
 
+    def current_player_with_team(self) -> str:
+        """Get formatted string with player and their team"""
+        return f"{self.current_player().mention} ({self.possession})"
+
     def switch_possession(self, new_team: str, new_position: int):
         """Switch possession to the other team"""
         self.possession = new_team
@@ -75,8 +79,8 @@ class GameState:
         self.yards_gained_on_drive = None
 
     def format_score(self) -> str:
-        """Format current score"""
-        return f"**{self.score['Bombers']} - {self.score['Gunners']}**"
+        """Format current score with team names"""
+        return f"**Bombers {self.score['Bombers']} - {self.score['Gunners']} Gunners**"
 
     def format_time(self) -> str:
         """Format time remaining"""
@@ -159,7 +163,7 @@ async def newgame(interaction: discord.Interaction, opponent: discord.User):
     )
     embed.add_field(
         name="First Possession",
-        value=f"{game.current_player().mention}, choose your play style:\n`/balanced` | `/run` | `/pass`",
+        value=f"{game.current_player_with_team()}, choose your play style:\n`/balanced` | `/run` | `/pass`",
         inline=False
     )
 
@@ -198,7 +202,7 @@ async def handle_play_style(interaction: discord.Interaction, style: str):
     # Check if it's this player's turn
     if interaction.user.id != game.current_player().id:
         await interaction.response.send_message(
-            f"⚠️ It's {game.current_player().mention}'s turn!",
+            f"⚠️ It's {game.current_player_with_team()}'s turn!",
             ephemeral=True
         )
         return
@@ -218,7 +222,7 @@ async def handle_play_style(interaction: discord.Interaction, style: str):
 async def execute_drive(interaction: discord.Interaction, game: GameState, style: str):
     """Execute a drive with the chosen style"""
     from gridiron_dice import (
-        TABLES, check_turnover, advance, is_safety, is_td_yardage,
+        TABLES, TURNOVER_THRESHOLDS, advance, is_safety, is_td_yardage,
         roll_time_for_td, FIELD_GOAL_DISTANCE
     )
 
@@ -226,9 +230,9 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
     roll = random.randint(1, 20)
     y, t = TABLES[style][roll - 1]
 
-    # Roll for turnover
-    turnover_occurred = check_turnover(style)
+    # Roll for turnover (do the roll here so we can show the actual roll used)
     turnover_roll = random.randint(1, 20)
+    turnover_occurred = turnover_roll in TURNOVER_THRESHOLDS[style]
 
     # Build response
     embed = discord.Embed(
@@ -263,7 +267,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
             embed.add_field(name="Time", value=game.format_time(), inline=True)
             embed.add_field(
                 name="Next",
-                value=f"{game.current_player().mention}'s turn at the 20.\nChoose: `/balanced` | `/run` | `/pass`",
+                value=f"{game.current_player_with_team()}'s turn at the 20.\nChoose: `/balanced` | `/run` | `/pass`",
                 inline=False
             )
         else:
@@ -283,7 +287,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
             embed.add_field(name="Time", value=game.format_time(), inline=True)
             embed.add_field(
                 name="Extra Point",
-                value=f"{game.current_player().mention}, choose conversion:\n`/1pt` (~85% success) | `/2pt` (40% success)",
+                value=f"{game.current_player_with_team()}, choose conversion:\n`/1pt` (~85% success) | `/2pt` (40% success)",
                 inline=False
             )
     else:
@@ -310,7 +314,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
             embed.add_field(name="Time", value=game.format_time(), inline=True)
             embed.add_field(
                 name="Next",
-                value=f"{game.current_player().mention}'s turn at the 30.\nChoose: `/balanced` | `/run` | `/pass`",
+                value=f"{game.current_player_with_team()}'s turn at the 30.\nChoose: `/balanced` | `/run` | `/pass`",
                 inline=False
             )
         else:
@@ -349,7 +353,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                 embed.add_field(name="Time", value=game.format_time(), inline=True)
                 embed.add_field(
                     name="Next",
-                    value=f"{game.current_player().mention}'s turn.\nChoose: `/balanced` | `/run` | `/pass`",
+                    value=f"{game.current_player_with_team()}'s turn.\nChoose: `/balanced` | `/run` | `/pass`",
                     inline=False
                 )
             else:
@@ -377,7 +381,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                     embed.add_field(name="Time", value=game.format_time(), inline=True)
                     embed.add_field(
                         name="Extra Point",
-                        value=f"{game.current_player().mention}, choose conversion:\n`/1pt` (~85% success) | `/2pt` (40% success)",
+                        value=f"{game.current_player_with_team()}, choose conversion:\n`/1pt` (~85% success) | `/2pt` (40% success)",
                         inline=False
                     )
                 else:
@@ -431,7 +435,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                     embed.add_field(name="Time", value=game.format_time(), inline=True)
                     embed.add_field(
                         name="Choose",
-                        value=f"{game.current_player().mention}: {' | '.join(options)}",
+                        value=f"{game.current_player_with_team()}: {' | '.join(options)}",
                         inline=False
                     )
 
@@ -470,7 +474,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
 
     if interaction.user.id != game.current_player().id:
         await interaction.response.send_message(
-            f"⚠️ It's {game.current_player().mention}'s turn!",
+            f"⚠️ It's {game.current_player_with_team()}'s turn!",
             ephemeral=True
         )
         return
@@ -507,7 +511,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
             embed.add_field(name="Time", value=game.format_time(), inline=True)
             embed.add_field(
                 name="Extra Point",
-                value=f"{game.current_player().mention}, choose:\n`/1pt` | `/2pt`",
+                value=f"{game.current_player_with_team()}, choose:\n`/1pt` | `/2pt`",
                 inline=False
             )
         elif is_first_down:
@@ -524,7 +528,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
             )
             embed.add_field(
                 name="Next",
-                value=f"{game.current_player().mention}, choose:\n`/balanced` | `/run` | `/pass`",
+                value=f"{game.current_player_with_team()}, choose:\n`/balanced` | `/run` | `/pass`",
                 inline=False
             )
         else:
@@ -537,7 +541,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
             embed.add_field(name="Time", value=game.format_time(), inline=True)
             embed.add_field(
                 name="Next",
-                value=f"{game.current_player().mention}'s turn.\n Choose: `/balanced` | `/run` | `/pass`",
+                value=f"{game.current_player_with_team()}'s turn.\n Choose: `/balanced` | `/run` | `/pass`",
                 inline=False
             )
 
@@ -571,7 +575,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
             )
             embed.add_field(
                 name="Next",
-                value=f"{game.current_player().mention}, choose:\n`/balanced` | `/run` | `/pass`",
+                value=f"{game.current_player_with_team()}, choose:\n`/balanced` | `/run` | `/pass`",
                 inline=False
             )
         else:
@@ -585,7 +589,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
             embed.add_field(name="Time", value=game.format_time(), inline=True)
             embed.add_field(
                 name="Next",
-                value=f"{game.current_player().mention}, choose:\n`/balanced` | `/run` | `/pass`",
+                value=f"{game.current_player_with_team()}, choose:\n`/balanced` | `/run` | `/pass`",
                 inline=False
             )
 
@@ -600,7 +604,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
         embed.add_field(name="Time", value=game.format_time(), inline=True)
         embed.add_field(
             name="Next",
-            value=f"{game.current_player().mention}, choose:\n`/balanced` | `/run` | `/pass`",
+            value=f"{game.current_player_with_team()}, choose:\n`/balanced` | `/run` | `/pass`",
             inline=False
         )
 
@@ -629,7 +633,7 @@ async def handle_extra_point(interaction: discord.Interaction, go_for_two: bool)
 
     if interaction.user.id != game.current_player().id:
         await interaction.response.send_message(
-            f"⚠️ It's {game.current_player().mention}'s turn!",
+            f"⚠️ It's {game.current_player_with_team()}'s turn!",
             ephemeral=True
         )
         return
@@ -683,7 +687,7 @@ async def handle_extra_point(interaction: discord.Interaction, go_for_two: bool)
     )
     embed.add_field(
         name="Next",
-        value=f"{game.current_player().mention}, choose:\n`/balanced` | `/run` | `/pass`",
+        value=f"{game.current_player_with_team()}, choose:\n`/balanced` | `/run` | `/pass`",
         inline=False
     )
 
@@ -720,7 +724,7 @@ async def end_half(channel, game: GameState):
         )
         embed.add_field(
             name="Next",
-            value=f"{game.current_player().mention}, choose:\n`/balanced` | `/run` | `/pass`",
+            value=f"{game.current_player_with_team()}, choose:\n`/balanced` | `/run` | `/pass`",
             inline=False
         )
     else:
@@ -768,7 +772,7 @@ async def status(interaction: discord.Interaction):
     embed.add_field(name="Time", value=game.format_time(), inline=True)
     embed.add_field(
         name="Possession",
-        value=f"{game.current_player().mention} ({game.possession})",
+        value=f"{game.current_player_with_team()}",
         inline=False
     )
     embed.add_field(
