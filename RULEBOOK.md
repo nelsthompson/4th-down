@@ -380,8 +380,33 @@ When you gain enough yards to score a touchdown:
 If remaining time is less than the drive time indicated:
 1. Use the **largest non-TD row** that leaves at least 1 time block remaining
 2. Adjust yards to that row's yards
-3. If in field goal range, may attempt field goal and half ends
-4. Otherwise, half ends immediately after the play
+3. Check for safety, then check for touchdown, then check for turnover
+4. If none of those occur, the **offensive player has a choice**:
+
+**UNTIMED DOWN OPTIONS:**
+
+The offensive player may choose ONE of the following:
+
+**A) LET HALF END** - The half ends immediately with no further action
+
+**B) ATTEMPT FIELD GOAL** - If within 50 yards of the goal line
+- Roll on the Field Goal table
+- If successful: Award 3 points, opponent receives kickoff
+- If missed: No points scored
+- Half ends after the attempt
+
+**C) GO FOR IT** - Attempt to score like a 4th down conversion
+- Roll d20 on the 4th Down Conversion table
+- If result is "TD" or reaches end zone: Score touchdown (6 points) + extra point attempt, opponent receives kickoff
+- If result fails to score: No points scored
+- Half ends after the attempt
+
+**Strategic Notes:**
+- This applies at the end of BOTH halves
+- The choice is strategic - weigh the risk vs. reward based on score and field position
+- If you're in close FG range and need points, attempting the FG is often wise
+- If trailing and close to the goal, going for it might be the better choice
+- If leading comfortably, you might just let the half end
 
 ## Kickoffs
 

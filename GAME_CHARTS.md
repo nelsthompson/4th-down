@@ -164,6 +164,17 @@ Roll d20 (1-20) when attempting field goal:
 
 ---
 
+## Untimed Down (End of Half)
+
+When time expires at end of half, offensive player chooses ONE:
+
+- **Let half end** - No further action
+- **Attempt field goal** - Roll FG table, half ends after attempt
+- **Go for it** - Roll 4th down conversion table, half ends after attempt
+  - If TD: Score 6 + extra point attempt, then half ends
+
+---
+
 ## Drive Sequence Checklist
 
 1. ☐ Choose play style (Balanced / Run / Pass)

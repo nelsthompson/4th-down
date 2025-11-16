@@ -169,6 +169,123 @@ def check_turnover(style: str) -> bool:
     turnover_roll = random.randint(1, 20)
     return turnover_roll in TURNOVER_THRESHOLDS[style]
 
+def end_of_half_decision(team: str, x: int, score: Dict[str, int], opponent: str, half: int) -> str:
+    """
+    AI decision for end-of-half untimed down.
+    Returns: "end", "fg", or "go_for_it"
+
+    Strategic considerations:
+    - If in FG range with good distance: probably attempt FG
+    - If trailing late in 2nd half: more aggressive (go for it)
+    - If leading: let it end
+    - First half: less aggressive overall
+    """
+    lead = score[team] - score[opponent]
+    distance = yards_to_endzone(team, x)
+    in_fg_range = within_fg_range(team, x)
+
+    # Base probabilities
+    prob_fg = 0.0
+    prob_go_for_it = 0.0
+    prob_end = 1.0
+
+    if half == 1:
+        # First half - less aggressive
+        if in_fg_range:
+            if distance <= 25:
+                prob_fg = 0.70
+                prob_end = 0.25
+                prob_go_for_it = 0.05
+            elif distance <= 35:
+                prob_fg = 0.50
+                prob_end = 0.45
+                prob_go_for_it = 0.05
+            else:  # 36-50 yards
+                prob_fg = 0.30
+                prob_end = 0.65
+                prob_go_for_it = 0.05
+        else:
+            # Not in FG range
+            if distance <= 10:
+                prob_go_for_it = 0.20
+                prob_end = 0.80
+            else:
+                prob_end = 1.0
+    else:
+        # Second half - more aggressive based on score
+        if in_fg_range:
+            if lead < -2:  # Trailing by more than a FG
+                # More aggressive
+                if distance <= 25:
+                    prob_fg = 0.60
+                    prob_go_for_it = 0.30
+                    prob_end = 0.10
+                elif distance <= 35:
+                    prob_fg = 0.50
+                    prob_go_for_it = 0.30
+                    prob_end = 0.20
+                else:
+                    prob_fg = 0.30
+                    prob_go_for_it = 0.40
+                    prob_end = 0.30
+            elif lead < 0:  # Trailing by 1-3
+                if distance <= 25:
+                    prob_fg = 0.80
+                    prob_go_for_it = 0.10
+                    prob_end = 0.10
+                elif distance <= 35:
+                    prob_fg = 0.70
+                    prob_go_for_it = 0.15
+                    prob_end = 0.15
+                else:
+                    prob_fg = 0.50
+                    prob_go_for_it = 0.25
+                    prob_end = 0.25
+            else:  # Tied or leading
+                if distance <= 25:
+                    prob_fg = 0.85
+                    prob_end = 0.10
+                    prob_go_for_it = 0.05
+                elif distance <= 35:
+                    prob_fg = 0.70
+                    prob_end = 0.25
+                    prob_go_for_it = 0.05
+                else:
+                    prob_fg = 0.40
+                    prob_end = 0.55
+                    prob_go_for_it = 0.05
+        else:
+            # Not in FG range
+            if lead < -6:  # Trailing by more than a TD
+                if distance <= 15:
+                    prob_go_for_it = 0.60
+                    prob_end = 0.40
+                elif distance <= 25:
+                    prob_go_for_it = 0.35
+                    prob_end = 0.65
+                else:
+                    prob_go_for_it = 0.15
+                    prob_end = 0.85
+            elif lead < 0:  # Trailing
+                if distance <= 15:
+                    prob_go_for_it = 0.40
+                    prob_end = 0.60
+                else:
+                    prob_go_for_it = 0.15
+                    prob_end = 0.85
+            else:
+                # Leading or tied - let it end
+                prob_end = 1.0
+
+    # Make decision based on probabilities
+    r = random.random()
+    if r < prob_fg:
+        return "fg"
+    elif r < prob_fg + prob_go_for_it:
+        return "go_for_it"
+    else:
+        return "end"
+
 def should_go_for_it(team: str, x: int, score: Dict[str, int], blocks_left: int, half: int, style: str) -> bool:
     """
     AI decision: should the team go for it on 4th down?
@@ -399,21 +516,44 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
             # Not TD; check for turnover first
             if turnover_occurred:
                 log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Turnover (late-half)", 0)
-                return log, blocks_left, opponent, kickoff_position(opponent)
-            # if FG range, allow FG attempt as the final action:
-            if within_fg_range(team, end_x):
-                fg_good = attempt_field_goal(team, end_x)
-                if fg_good:
-                    log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "FG Good (late-half)", 3)
-                    score[team] += 3
+                return log, blocks_left, opponent, end_x
+            # End of half - player can choose to let it end, attempt FG, or go for it
+            decision = end_of_half_decision(team, end_x, score, opponent, half)
+            if decision == "end":
+                log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Half Ends (untimed down declined)", 0)
+                return log, blocks_left, opponent, end_x
+            elif decision == "fg":
+                if within_fg_range(team, end_x):
+                    fg_good = attempt_field_goal(team, end_x)
+                    if fg_good:
+                        log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "FG Good (untimed down)", 3)
+                        score[team] += 3
+                    else:
+                        miss_spot = missed_fg_spot(team, end_x)
+                        log = DriveLog(half, team, x, style, roll, adj_y, adj_t, miss_spot, "FG Miss (untimed down)", 0)
+                    return log, blocks_left, opponent, kickoff_position(opponent)
                 else:
-                    # Missed FG late-half: move back 7, clamp at receiving 20
-                    miss_spot = missed_fg_spot(team, end_x)
-                    log = DriveLog(half, team, x, style, roll, adj_y, adj_t, miss_spot, "FG Miss (late-half, spot set)", 0)
-                return log, blocks_left, opponent, kickoff_position(opponent)  # half ends
-            # Otherwise half ends with no score:
-            log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Half Ends (adj)", 0)
-            return log, blocks_left, opponent, kickoff_position(opponent)
+                    # Can't kick FG if not in range - treat as end
+                    log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Half Ends (untimed down declined)", 0)
+                    return log, blocks_left, opponent, end_x
+            else:  # go_for_it
+                # Calculate yards to goal (this is like 4th and goal from current position)
+                distance_to_goal = yards_to_endzone(team, end_x)
+                success, yards_gained, is_td, new_x, is_first_down = attempt_fourth_down(team, end_x, distance_to_goal)
+
+                if is_td:
+                    # TD on untimed down - award 6 plus extra point attempt
+                    extra_pts, conv_type = attempt_extra_point(team, score, blocks_left, half)
+                    total_pts = 6 + extra_pts
+                    result_str = f"Untimed TD+{conv_type}"
+                    log = DriveLog(half, team, x, style, roll, adj_y, adj_t, new_x, result_str, total_pts)
+                    score[team] += total_pts
+                    return log, blocks_left, opponent, kickoff_position(opponent)
+                else:
+                    # Failed untimed down attempt - half ends
+                    result_str = "Untimed down failed"
+                    log = DriveLog(half, team, x, style, roll, adj_y, adj_t, new_x, result_str, 0)
+                    return log, blocks_left, opponent, new_x
 
         # TD fits in time:
         end_x = 100 if team == "Bombers" else 0
@@ -463,24 +603,47 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
             log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, result_str, total_pts)
             score[team] += total_pts
             return log, blocks_left, opponent, kickoff_position(opponent)  # half ends
-        # Check for turnover before FG/punt
+        # Check for turnover before untimed down decision
         if turnover_occurred:
             log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Turnover (late-half)", 0)
-            return log, blocks_left, opponent, kickoff_position(opponent)
-        # Else if FG range, allow final FG and end half:
-        if within_fg_range(team, end_x):
-            fg_good = attempt_field_goal(team, end_x)
-            if fg_good:
-                log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "FG Good (late-half)", 3)
-                score[team] += 3
+            return log, blocks_left, opponent, end_x
+        # End of half - player can choose to let it end, attempt FG, or go for it
+        decision = end_of_half_decision(team, end_x, score, opponent, half)
+        if decision == "end":
+            log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Half Ends (untimed down declined)", 0)
+            return log, blocks_left, opponent, end_x
+        elif decision == "fg":
+            if within_fg_range(team, end_x):
+                fg_good = attempt_field_goal(team, end_x)
+                if fg_good:
+                    log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "FG Good (untimed down)", 3)
+                    score[team] += 3
+                else:
+                    miss_spot = missed_fg_spot(team, end_x)
+                    log = DriveLog(half, team, x, style, roll, adj_y, adj_t, miss_spot, "FG Miss (untimed down)", 0)
+                return log, blocks_left, opponent, kickoff_position(opponent)
             else:
-                # Missed FG late-half: move back 7, clamp at receiving 20
-                miss_spot = missed_fg_spot(team, end_x)
-                log = DriveLog(half, team, x, style, roll, adj_y, adj_t, miss_spot, "FG Miss (late-half, spot set)", 0)
-            return log, blocks_left, opponent, kickoff_position(opponent)  # half ends
-        # Otherwise half ends immediately:
-        log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Half Ends (adj)", 0)
-        return log, blocks_left, opponent, kickoff_position(opponent)
+                # Can't kick FG if not in range - treat as end
+                log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Half Ends (untimed down declined)", 0)
+                return log, blocks_left, opponent, end_x
+        else:  # go_for_it
+            # Calculate yards to goal (this is like 4th and goal from current position)
+            distance_to_goal = yards_to_endzone(team, end_x)
+            success, yards_gained, is_td, new_x, is_first_down = attempt_fourth_down(team, end_x, distance_to_goal)
+
+            if is_td:
+                # TD on untimed down - award 6 plus extra point attempt
+                extra_pts, conv_type = attempt_extra_point(team, score, blocks_left, half)
+                total_pts = 6 + extra_pts
+                result_str = f"Untimed TD+{conv_type}"
+                log = DriveLog(half, team, x, style, roll, adj_y, adj_t, new_x, result_str, total_pts)
+                score[team] += total_pts
+                return log, blocks_left, opponent, kickoff_position(opponent)
+            else:
+                # Failed untimed down attempt - half ends
+                result_str = "Untimed down failed"
+                log = DriveLog(half, team, x, style, roll, adj_y, adj_t, new_x, result_str, 0)
+                return log, blocks_left, opponent, new_x
 
     # Fits in time -> resolve normally
     end_x = advance(team, x, yards)
@@ -601,7 +764,15 @@ def simulate_half(start_team: str, start_x: int, score: Dict[str,int], half: int
         # deduct time:
         # If late-half branch consumed "blocks_left" (we passed blocks_left in play_drive),
         # we ensure the half ends right after recording the drive:
-        if log.result.startswith("TD (late-half") or log.result.startswith("FG Good (late-half)") or log.result.startswith("FG Miss (late-half") or log.result == "Half Ends (adj)":
+        if (log.result.startswith("TD (late-half") or
+            log.result.startswith("FG Good (late-half)") or
+            log.result.startswith("FG Miss (late-half") or
+            log.result == "Half Ends (adj)" or
+            log.result.startswith("FG Good (untimed down)") or
+            log.result.startswith("FG Miss (untimed down)") or
+            log.result.startswith("Untimed TD+") or
+            log.result == "Untimed down failed" or
+            log.result == "Half Ends (untimed down declined)"):
             # end half immediately after applying the adjustment
             blocks = 0
             break
