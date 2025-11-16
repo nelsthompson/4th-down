@@ -896,6 +896,8 @@ async def handle_extra_point(interaction: discord.Interaction, go_for_two: bool)
 
 async def end_half(channel, game: GameState):
     """End the current half"""
+    original_half = game.half  # Save before we modify it
+
     embed = discord.Embed(
         title="⏰ END OF HALF" if game.half == 1 else "🏁 GAME OVER",
         color=discord.Color.red()
@@ -947,7 +949,7 @@ async def end_half(channel, game: GameState):
     await channel.send(embed=stats_embed)
 
     # Remove game from active games after game over (not at halftime)
-    if game.half == 2:
+    if original_half == 2:
         del games[game.channel_id]
 
 
