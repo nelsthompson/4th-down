@@ -791,6 +791,83 @@ async def status(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 
+@bot.tree.command(name="help", description="Show how to play 4th Down")
+async def help_command(interaction: discord.Interaction):
+    """Show game help and commands"""
+    embed = discord.Embed(
+        title="🏈 4th Down! A Dice Football Game",
+        description="Turn-based dice football for 2 players",
+        color=discord.Color.blue()
+    )
+
+    # How to start
+    embed.add_field(
+        name="🎮 How to Start",
+        value="Use `/newgame @opponent` to challenge someone to a game!",
+        inline=False
+    )
+
+    # Play styles
+    embed.add_field(
+        name="📊 Play Styles (Choose each drive)",
+        value=(
+            "**`/balanced`** - Moderate yards, 10% turnover risk\n"
+            "**`/run`** - Grinds clock, 5% turnover risk (safest)\n"
+            "**`/pass`** - Big plays, 20% turnover risk (riskiest)"
+        ),
+        inline=False
+    )
+
+    # 4th down options
+    embed.add_field(
+        name="🏁 4th Down Options",
+        value=(
+            "**`/goforit`** - Attempt conversion (or TD!)\n"
+            "**`/fieldgoal`** - Try for 3 points\n"
+            "**`/punt`** - Kick it away (40 yards)"
+        ),
+        inline=False
+    )
+
+    # Scoring
+    embed.add_field(
+        name="⚡ Extra Points (After TD)",
+        value=(
+            "**`/1pt`** - Kick (85% success) → 7 total\n"
+            "**`/2pt`** - Go for 2 (40% success) → 8 total"
+        ),
+        inline=False
+    )
+
+    # Utility commands
+    embed.add_field(
+        name="🔧 Utility",
+        value=(
+            "**`/status`** - Check current game state\n"
+            "**`/endgame`** - End current game\n"
+            "**`/help`** - Show this message"
+        ),
+        inline=False
+    )
+
+    # Quick rules
+    embed.add_field(
+        name="📜 Quick Rules",
+        value=(
+            "• Game = 2 halves of 30 game minutes\n"
+            "• First downs: Need 10 total yards\n"
+            "• Field goals: Must be within 50 yards\n"
+            "• TD = 6 points + conversion attempt\n"
+            "• Take turns choosing plays"
+        ),
+        inline=False
+    )
+
+    embed.set_footer(text="Good luck! 🏈")
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
 @bot.tree.command(name="endgame", description="End the current game (both players must agree)")
 async def endgame(interaction: discord.Interaction):
     """End the current game"""
