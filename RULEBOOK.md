@@ -1,8 +1,8 @@
-# Gridiron Dice Football - Rulebook
+# 4th Down! A Dice Football Game - Rulebook
 
 ## Game Overview
 
-Gridiron Dice Football is a fast-paced, dice-driven football simulation game for 2 players. Each player controls a team competing to score the most points in a 60-minute game (two 30-minute halves).
+4th Down is a fast-paced, dice-driven football simulation game for 2 players. Each player controls a team competing to score the most points in a 60-minute game (two 30-minute halves).
 
 ## Objective
 

@@ -1,5 +1,5 @@
-# No external dependencies required
-# This project uses Python standard library only
+# Discord Bot dependencies
+discord.py>=2.3.0
 
+# Game simulation (no external dependencies)
 # Minimum Python version: 3.7
-# (requires dataclasses which was added in Python 3.7)

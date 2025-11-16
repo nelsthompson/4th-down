@@ -1,4 +1,4 @@
-# Gridiron Dice Football - Game Charts
+# 4th Down! A Dice Football Game - Game Charts
 
 Quick reference charts for gameplay. Print this page for easy access during play.
 

@@ -1,4 +1,4 @@
-# Gridiron Dice Football - full simulation (v0.6)
+# 4th Down! A Dice Football Game - full simulation (v0.7)
 # Distance-based field goals + Turnovers + 4th Down Conversions
 # Author: Synthia + You
 

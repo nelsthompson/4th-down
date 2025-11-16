@@ -1,10 +1,10 @@
-# Gridiron Dice Football
+# 4th Down! A Dice Football Game
 
 A fast-paced, dice-driven football simulation game for 2 players or AI simulation. Play face-to-face with physical dice or run thousands of simulated games to analyze strategies.
 
 ## Overview
 
-Gridiron Dice Football uses simple dice rolls and lookup tables to create realistic football games with:
+4th Down uses simple dice rolls and lookup tables to create realistic football games with:
 
 - **Three offensive styles**: Balanced, Run-First, and Pass-First (each with different risk/reward)
 - **Complete scoring**: Touchdowns (6 pts) + extra points (1pt or 2pt), field goals (3 pts), safeties (2 pts)
