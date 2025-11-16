@@ -286,24 +286,32 @@ def end_of_half_decision(team: str, x: int, score: Dict[str, int], opponent: str
     else:
         return "end"
 
-def should_go_for_it(team: str, x: int, score: Dict[str, int], blocks_left: int, half: int, style: str) -> bool:
+def should_go_for_it(team: str, x: int, score: Dict[str, int], blocks_left: int, half: int, style: str, yards_gained: int) -> bool:
     """
     AI decision: should the team go for it on 4th down?
     Considers game situation, field position, and score.
-    Uses style-dependent dice for 4th down distance.
+
+    4th down distance rules:
+    - If yards_gained < 10: yards_to_go = 10 - yards_gained
+    - Otherwise: roll based on style (d8 for run, d10 for balanced, d20 for pass)
     """
     opponent = "Gunners" if team == "Bombers" else "Bombers"
     lead = score[team] - score[opponent]
     distance_to_goal = yards_to_endzone(team, x)
 
-    # Calculate yards to go based on play style
-    # Run-first: d8 (1-8), Balanced: d10 (1-10), Pass-first: d20 (1-20)
-    if style == "run":
-        yards_to_go = random.randint(1, 8)
-    elif style == "balanced":
-        yards_to_go = random.randint(1, 10)
-    else:  # pass
-        yards_to_go = random.randint(1, 20)
+    # Calculate yards to go based on yards gained
+    if yards_gained < 10:
+        # Short gain: need 10 yards total for first down
+        yards_to_go = 10 - yards_gained
+    else:
+        # Gained 10+ yards: roll for distance based on play style
+        # Run-first: d8 (1-8), Balanced: d10 (1-10), Pass-first: d20 (1-20)
+        if style == "run":
+            yards_to_go = random.randint(1, 8)
+        elif style == "balanced":
+            yards_to_go = random.randint(1, 10)
+        else:  # pass
+            yards_to_go = random.randint(1, 20)
 
     # If yards to go >= distance to goal, it's 4th and goal
     if yards_to_go >= distance_to_goal:
@@ -498,13 +506,20 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
                 log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Safety (late-half)", 0)
                 score[opponent] += 2
                 return log, blocks_left, opponent, kickoff_position(opponent)
-            # Check: is adjusted yardage a TD? Our non-TD rows are numeric yards only.
-            if is_td_yardage(team, end_x):
-                # Check for turnover
-                if turnover_occurred:
+            # Check for turnover BEFORE resolving TD (late-half adjusted)
+            if turnover_occurred:
+                # Check if this would have been a TD
+                if is_td_yardage(team, end_x):
+                    # Would have been TD - opponent gets ball at their 20
                     opponent_20 = 20 if opponent == "Bombers" else 80
                     log = DriveLog(half, team, x, style, roll, adj_y, adj_t, opponent_20, "Turnover (late-half, would be TD)", 0)
-                    return log, blocks_left, opponent, kickoff_position(opponent)
+                    return log, blocks_left, opponent, opponent_20
+                else:
+                    # Not a TD - regular turnover
+                    log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Turnover (late-half)", 0)
+                    return log, blocks_left, opponent, end_x
+            # No turnover - check if adjusted yardage is a TD
+            if is_td_yardage(team, end_x):
                 # TD and end half immediately
                 # Award 6 for TD plus extra point attempt
                 extra_pts, conv_type = attempt_extra_point(team, score, blocks_left, half)
@@ -513,10 +528,6 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
                 log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, result_str, total_pts)
                 score[team] += total_pts
                 return log, blocks_left, opponent, kickoff_position(opponent)  # half ends by caller when it sees 0 left
-            # Not TD; check for turnover first
-            if turnover_occurred:
-                log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Turnover (late-half)", 0)
-                return log, blocks_left, opponent, end_x
             # End of half - player can choose to let it end, attempt FG, or go for it
             decision = end_of_half_decision(team, end_x, score, opponent, half)
             if decision == "end":
@@ -589,13 +600,20 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
             log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Safety (late-half)", 0)
             score[opponent] += 2
             return log, blocks_left, opponent, kickoff_position(opponent)
-        # If adjusted row reaches TD:
-        if is_td_yardage(team, end_x):
-            # Check for turnover
-            if turnover_occurred:
+        # Check for turnover BEFORE resolving TD (late-half non-TD row)
+        if turnover_occurred:
+            # Check if this would have been a TD
+            if is_td_yardage(team, end_x):
+                # Would have been TD - opponent gets ball at their 20
                 opponent_20 = 20 if opponent == "Bombers" else 80
                 log = DriveLog(half, team, x, style, roll, adj_y, adj_t, opponent_20, "Turnover (late-half, would be TD)", 0)
-                return log, blocks_left, opponent, kickoff_position(opponent)
+                return log, blocks_left, opponent, opponent_20
+            else:
+                # Not a TD - regular turnover
+                log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Turnover (late-half)", 0)
+                return log, blocks_left, opponent, end_x
+        # No turnover - check if adjusted row reaches TD
+        if is_td_yardage(team, end_x):
             # Award 6 for TD plus extra point attempt
             extra_pts, conv_type = attempt_extra_point(team, score, blocks_left, half)
             total_pts = 6 + extra_pts
@@ -603,10 +621,6 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
             log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, result_str, total_pts)
             score[team] += total_pts
             return log, blocks_left, opponent, kickoff_position(opponent)  # half ends
-        # Check for turnover before untimed down decision
-        if turnover_occurred:
-            log = DriveLog(half, team, x, style, roll, adj_y, adj_t, end_x, "Turnover (late-half)", 0)
-            return log, blocks_left, opponent, end_x
         # End of half - player can choose to let it end, attempt FG, or go for it
         decision = end_of_half_decision(team, end_x, score, opponent, half)
         if decision == "end":
@@ -655,20 +669,30 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
         score[opponent] += 2
         return log, time_spent, opponent, kickoff_position(opponent)
 
-    # If yardage reaches end zone by yardage (not TD row), apply TD-time cap rule:
+    # Check for turnover BEFORE resolving TD
+    # But if it would have been a TD, use TD time
+    if turnover_occurred:
+        # Check if this would have been a TD
+        if is_td_yardage(team, end_x):
+            # Would have been TD - use TD time, opponent gets ball at their 20
+            yards_needed = yards_to_endzone(team, x)
+            td_time = roll_time_for_td(style, yards_needed)
+            time_spent = min(time_spent, td_time)
+            opponent_20 = 20 if opponent == "Bombers" else 80
+            log = DriveLog(half, team, x, style, roll, yards_needed, time_spent, opponent_20, "Turnover (would be TD)", 0)
+            return log, time_spent, opponent, opponent_20
+        else:
+            # Not a TD - regular turnover, use regular time
+            log = DriveLog(half, team, x, style, roll, yards, time_spent, end_x, "Turnover", 0)
+            return log, time_spent, opponent, end_x
+
+    # No turnover - check for TD
     if is_td_yardage(team, end_x):
         # time cap by "required yards" row
         yards_needed = yards_to_endzone(team, x)
         td_time = roll_time_for_td(style, yards_needed)
         time_spent = min(time_spent, td_time)
         end_x_td = 100 if team == "Bombers" else 0
-
-        # Check for turnover
-        if turnover_occurred:
-            # Turnover on TD: opponent gets ball at their 20
-            opponent_20 = 20 if opponent == "Bombers" else 80
-            log = DriveLog(half, team, x, style, roll, yards_needed, time_spent, opponent_20, "Turnover (would be TD)", 0)
-            return log, time_spent, opponent, opponent_20
 
         # Award 6 for TD plus extra point attempt
         extra_pts, conv_type = attempt_extra_point(team, score, blocks_left, half)
@@ -678,15 +702,9 @@ def play_drive(team: str, opponent: str, x: int, style: str, blocks_left: int, h
         score[team] += total_pts
         return log, time_spent, opponent, kickoff_position(opponent)
 
-    # No TD: decide FG, Punt, or 4th down attempt
-    # Check for turnover first - turnovers prevent 4th down attempts
-    if turnover_occurred:
-        # Turnover: opponent gets ball at current spot
-        log = DriveLog(half, team, x, style, roll, yards, time_spent, end_x, "Turnover", 0)
-        return log, time_spent, opponent, end_x
-
     # 4th down decision (only if no turnover)
-    go_for_it, yards_to_go, is_4th_and_goal = should_go_for_it(team, end_x, score, blocks_left, half, style)
+    # Pass yards gained to determine 4th down distance
+    go_for_it, yards_to_go, is_4th_and_goal = should_go_for_it(team, end_x, score, blocks_left, half, style, yards)
 
     if go_for_it:
         # Attempt 4th down conversion
