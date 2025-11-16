@@ -529,18 +529,18 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                             options.append("`/fieldgoal`")
                         options.append("`/punt`")
 
-                    embed.add_field(name="Score", value=game.format_score(), inline=True)
-                    embed.add_field(name="Time", value=game.format_time(), inline=True)
-                    embed.add_field(
-                        name="Choose",
-                        value=f"{game.current_player_with_team()}: {' | '.join(options)}",
-                        inline=False
-                    )
+                        embed.add_field(name="Score", value=game.format_score(), inline=True)
+                        embed.add_field(name="Time", value=game.format_time(), inline=True)
+                        embed.add_field(
+                            name="Choose",
+                            value=f"{game.current_player_with_team()}: {' | '.join(options)}",
+                            inline=False
+                        )
 
     await interaction.response.send_message(embed=embed)
 
-    # Check for half/game end
-    if game.blocks_left <= 0:
+    # Check for half/game end - but NOT if we're awaiting a final play
+    if game.blocks_left <= 0 and game.awaiting_action != "final_play":
         await end_half(interaction.channel, game)
 
 
