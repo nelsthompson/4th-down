@@ -557,21 +557,15 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                         embed.add_field(name="Time", value="⏰ **TIME EXPIRED - 1 Second Remaining**", inline=True)
                         embed.add_field(name="Drive Elapsed", value=game.format_drive_elapsed(), inline=True)
 
-                        situation = "goal" if game.is_4th_and_goal else f"{ytg}"
-                        embed.add_field(
-                            name="Final Play",
-                            value=f"**4th and {situation}**\nOne final play available!",
-                            inline=False
-                        )
-
                         # Final play options: field goal or go for it (no punt)
-                        options = ["`/goforit`"]
+                        options = []
                         if within_fg_range(game.possession, end_x):
                             options.append("`/fieldgoal`")
+                        options.append("`/goforit`")
 
                         embed.add_field(
-                            name="Options",
-                            value=f"{game.current_player_with_team()}: {' | '.join(options)}",
+                            name="Final Play",
+                            value=f"Time expired! One final play available.\n{game.current_player_with_team()}: {' | '.join(options)}",
                             inline=False
                         )
                     else:
@@ -689,7 +683,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
         )
 
         embed.add_field(name="Attempt", value=f"🎲 Rolled **{roll}** on conversion table", inline=False)
-        embed.add_field(name="Result", value=f"**{yards_gained if yards_gained != 'TD' else 'TOUCHDOWN!'}** yards gained", inline=False)
+        embed.add_field(name="Result", value=f"**{yards_gained:+d}** yards gained", inline=False)
 
         if is_td:
             embed.add_field(name="Outcome", value=f"🎉 **TOUCHDOWN!** {game.possession} +6", inline=False)
@@ -741,11 +735,12 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
             return
 
         distance = yards_to_endzone(game.possession, game.field_position)
-        fg_good = attempt_field_goal(game.possession, game.field_position)
 
+        # Roll for field goal attempt
         roll = random.randint(1, 20)
         from gridiron_dice import FIELD_GOAL_DISTANCE
         make_distance = FIELD_GOAL_DISTANCE[roll - 1]
+        fg_good = make_distance >= distance
 
         embed.add_field(name="Attempt", value=f"FG from **{distance}** yards", inline=False)
         embed.add_field(name="Roll", value=f"🎲 Rolled **{roll}** → Make distance: **{make_distance}** yards", inline=False)

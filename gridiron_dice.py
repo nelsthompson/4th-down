@@ -60,7 +60,7 @@ TABLES = {
 # Table is 0-indexed, so roll 1 uses index 0, roll 20 uses index 19
 FOURTH_DOWN_CONVERSION = [
     -10, -5, 0, 1, 1, 2, 2, 3, 3, 4,
-    4, 5, 6, 7, 8, 10, 14, 20, 30, "TD"
+    4, 5, 6, 7, 8, 10, 14, 20, 30, 50
 ]
 
 # Field goal make distance table (d20, 1-20)
@@ -369,14 +369,7 @@ def attempt_fourth_down(team: str, x: int, yards_to_go: int, roll: int = None) -
         roll = random.randint(1, 20)
     result = FOURTH_DOWN_CONVERSION[roll - 1]
 
-    # Handle TD result
-    if result == "TD":
-        # Automatic touchdown
-        end_x = 100 if team == "Bombers" else 0
-        yards_gained = yards_to_endzone(team, x)
-        return True, yards_gained, True, end_x, False
-
-    # Numeric yards result
+    # All results are numeric yards now (max 50)
     yards_gained = result
     new_x = advance(team, x, yards_gained)
 
