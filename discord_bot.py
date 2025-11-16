@@ -48,6 +48,29 @@ class GameState:
         self.blocks_left = BLOCKS_PER_HALF
         self.possession = "Bombers"  # Who has the ball
         self.field_position = 30  # Current yard line
+        self.drive_start_blocks = BLOCKS_PER_HALF  # Track when current drive started
+
+        # Stats tracking
+        self.stats = {
+            "Bombers": {
+                "yards": 0,
+                "possessions": 1,  # Start with 1 for opening possession
+                "time_of_possession": 0,
+                "fgs_made": 0,
+                "fgs_missed": 0,
+                "punts": 0,
+                "turnovers": 0
+            },
+            "Gunners": {
+                "yards": 0,
+                "possessions": 0,
+                "time_of_possession": 0,
+                "fgs_made": 0,
+                "fgs_missed": 0,
+                "punts": 0,
+                "turnovers": 0
+            }
+        }
 
         # Turn state
         self.awaiting_action = "play_style"  # play_style, 4th_down, extra_point
@@ -72,6 +95,8 @@ class GameState:
         """Switch possession to the other team"""
         self.possession = new_team
         self.field_position = new_position
+        self.drive_start_blocks = self.blocks_left  # Record start of new drive
+        self.stats[new_team]["possessions"] += 1  # Track new possession
         self.awaiting_action = "play_style"
         self.last_drive_result = None
         self.yards_to_go = None
@@ -88,6 +113,49 @@ class GameState:
         seconds = (self.blocks_left % 6) * 10
         half_str = "1st Half" if self.half == 1 else "2nd Half"
         return f"{half_str} - {minutes}:{seconds:02d} remaining"
+
+    def format_drive_elapsed(self) -> str:
+        """Format elapsed time on current drive"""
+        elapsed_blocks = self.drive_start_blocks - self.blocks_left
+        minutes = elapsed_blocks // 6
+        seconds = (elapsed_blocks % 6) * 10
+        return f"{minutes}:{seconds:02d}"
+
+    def format_stats(self) -> discord.Embed:
+        """Format game statistics as an embed"""
+        embed = discord.Embed(
+            title="📊 Game Statistics",
+            color=discord.Color.purple()
+        )
+
+        bombers_stats = self.stats["Bombers"]
+        gunners_stats = self.stats["Gunners"]
+
+        # Format time of possession
+        b_top_min = bombers_stats["time_of_possession"] // 6
+        b_top_sec = (bombers_stats["time_of_possession"] % 6) * 10
+        g_top_min = gunners_stats["time_of_possession"] // 6
+        g_top_sec = (gunners_stats["time_of_possession"] % 6) * 10
+
+        # Create stats table
+        stats_text = (
+            f"```\n"
+            f"{'Stat':<20} {'Bombers':>10} {'Gunners':>10}\n"
+            f"{'-'*42}\n"
+            f"{'Total Yards':<20} {bombers_stats['yards']:>10} {gunners_stats['yards']:>10}\n"
+            f"{'Possessions':<20} {bombers_stats['possessions']:>10} {gunners_stats['possessions']:>10}\n"
+            f"{'Time of Poss.':<20} {b_top_min:>9}:{b_top_sec:02d} {g_top_min:>9}:{g_top_sec:02d}\n"
+            f"{'FGs Made':<20} {bombers_stats['fgs_made']:>10} {gunners_stats['fgs_made']:>10}\n"
+            f"{'FGs Missed':<20} {bombers_stats['fgs_missed']:>10} {gunners_stats['fgs_missed']:>10}\n"
+            f"{'Punts':<20} {bombers_stats['punts']:>10} {gunners_stats['punts']:>10}\n"
+            f"{'Turnovers':<20} {bombers_stats['turnovers']:>10} {gunners_stats['turnovers']:>10}\n"
+            f"```"
+        )
+
+        embed.description = stats_text
+        embed.add_field(name="Score", value=self.format_score(), inline=False)
+
+        return embed
 
 
 def get_game(channel_id: int) -> Optional[GameState]:
@@ -308,6 +376,8 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
             )
 
             game.blocks_left -= time_spent
+            game.stats[game.possession]["time_of_possession"] += time_spent
+            game.stats[game.possession]["turnovers"] += 1
             opponent_20 = 20 if opponent == "Bombers" else 80
             game.switch_possession(opponent, opponent_20)
 
@@ -320,6 +390,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
             )
         else:
             # Touchdown!
+            yards_gained = yards_to_endzone(game.possession, game.field_position)
             embed.add_field(name="Result", value="✅ Safe!", inline=True)
             embed.add_field(
                 name="Outcome",
@@ -329,13 +400,15 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
 
             game.score[game.possession] += 6
             game.blocks_left -= time_spent
+            game.stats[game.possession]["yards"] += yards_gained
+            game.stats[game.possession]["time_of_possession"] += time_spent
             game.awaiting_action = "extra_point"
 
             embed.add_field(name="Score", value=game.format_score(), inline=True)
             embed.add_field(name="Time", value=game.format_time(), inline=True)
             embed.add_field(
                 name="Extra Point",
-                value=f"{game.current_player_with_team()}, choose conversion:\n`/1pt` (~85% success) | `/2pt` (40% success)",
+                value=f"{game.current_player_with_team()}, choose conversion:\n`/1pt` (95% success) | `/2pt` (40% success)",
                 inline=False
             )
     else:
@@ -356,6 +429,9 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
 
             game.score[opponent] += 2
             game.blocks_left -= time_spent
+            game.stats[game.possession]["yards"] += yards
+            game.stats[game.possession]["time_of_possession"] += time_spent
+            game.stats[game.possession]["turnovers"] += 1  # Safety counts as turnover
             game.switch_possession(opponent, kickoff_position(opponent))
 
             embed.add_field(name="Score", value=game.format_score(), inline=True)
@@ -384,6 +460,9 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                     time_spent = time_for_required_yards(style, yards_needed)
 
                     game.blocks_left -= time_spent
+                    game.stats[game.possession]["yards"] += yards_needed
+                    game.stats[game.possession]["time_of_possession"] += time_spent
+                    game.stats[game.possession]["turnovers"] += 1
                     opponent_20 = 20 if opponent == "Bombers" else 80
                     game.switch_possession(opponent, opponent_20)
                 else:
@@ -395,6 +474,9 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                     )
 
                     game.blocks_left -= time_spent
+                    game.stats[game.possession]["yards"] += yards
+                    game.stats[game.possession]["time_of_possession"] += time_spent
+                    game.stats[game.possession]["turnovers"] += 1
                     game.switch_possession(opponent, end_x)
 
                 embed.add_field(name="Score", value=game.format_score(), inline=True)
@@ -421,6 +503,8 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
 
                     game.score[game.possession] += 6
                     game.blocks_left -= time_spent
+                    game.stats[game.possession]["yards"] += yards_needed
+                    game.stats[game.possession]["time_of_possession"] += time_spent
                     game.field_position = end_x
                     game.awaiting_action = "extra_point"
 
@@ -428,13 +512,15 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                     embed.add_field(name="Time", value=game.format_time(), inline=True)
                     embed.add_field(
                         name="Extra Point",
-                        value=f"{game.current_player_with_team()}, choose conversion:\n`/1pt` (~85% success) | `/2pt` (40% success)",
+                        value=f"{game.current_player_with_team()}, choose conversion:\n`/1pt` (95% success) | `/2pt` (40% success)",
                         inline=False
                     )
                 else:
                     # No TD - check if time expired
                     game.field_position = end_x
                     game.blocks_left -= time_spent
+                    game.stats[game.possession]["yards"] += yards
+                    game.stats[game.possession]["time_of_possession"] += time_spent
                     game.yards_gained_on_drive = yards
 
                     if time_expired and game.blocks_left <= 0:
@@ -469,6 +555,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                         )
                         embed.add_field(name="Score", value=game.format_score(), inline=True)
                         embed.add_field(name="Time", value="⏰ **TIME EXPIRED - 1 Second Remaining**", inline=True)
+                        embed.add_field(name="Drive Elapsed", value=game.format_drive_elapsed(), inline=True)
 
                         situation = "goal" if game.is_4th_and_goal else f"{ytg}"
                         embed.add_field(
@@ -531,6 +618,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
 
                         embed.add_field(name="Score", value=game.format_score(), inline=True)
                         embed.add_field(name="Time", value=game.format_time(), inline=True)
+                        embed.add_field(name="Drive Elapsed", value=game.format_drive_elapsed(), inline=True)
                         embed.add_field(
                             name="Choose",
                             value=f"{game.current_player_with_team()}: {' | '.join(options)}",
@@ -665,6 +753,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
         if fg_good:
             embed.add_field(name="Result", value="✅ **FIELD GOAL GOOD!** +3", inline=False)
             game.score[game.possession] += 3
+            game.stats[game.possession]["fgs_made"] += 1
 
             game.switch_possession(opponent, kickoff_position(opponent))
 
@@ -685,6 +774,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
             embed.add_field(name="Result", value="❌ **FIELD GOAL MISS**", inline=False)
             embed.add_field(name="Ball Placement", value=f"{opponent} gets ball at {relative_position(opponent, miss_spot)}", inline=False)
 
+            game.stats[game.possession]["fgs_missed"] += 1
             game.switch_possession(opponent, miss_spot)
 
             embed.add_field(name="Score", value=game.format_score(), inline=True)
@@ -704,6 +794,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
         embed.add_field(name="Result", value="📤 **PUNT**", inline=False)
         embed.add_field(name="Ball Placement", value=f"{opponent} gets ball at {relative_position(opponent, spot)}", inline=False)
 
+        game.stats[game.possession]["punts"] += 1
         game.switch_possession(opponent, spot)
 
         embed.add_field(name="Score", value=game.format_score(), inline=True)
@@ -721,7 +812,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
         await end_half(interaction.channel, game)
 
 
-@bot.tree.command(name="1pt", description="Attempt 1-point conversion (~85% success)")
+@bot.tree.command(name="1pt", description="Attempt 1-point conversion (95% success)")
 async def one_point(interaction: discord.Interaction):
     """Attempt 1-point conversion"""
     await handle_extra_point(interaction, False)
@@ -821,6 +912,7 @@ async def end_half(channel, game: GameState):
         # Start second half
         game.half = 2
         game.blocks_left = BLOCKS_PER_HALF
+        game.drive_start_blocks = BLOCKS_PER_HALF  # Reset drive start for new half
 
         # Switch possession (team that kicked off in H1 receives in H2)
         # Bombers received first, so Gunners receive second half
@@ -853,10 +945,15 @@ async def end_half(channel, game: GameState):
 
         embed.add_field(name="Result", value=result, inline=False)
 
-        # Remove game from active games
-        del games[game.channel_id]
-
     await channel.send(embed=embed)
+
+    # Send stats after end of half/game
+    stats_embed = game.format_stats()
+    await channel.send(embed=stats_embed)
+
+    # Remove game from active games after game over (not at halftime)
+    if game.half == 2:
+        del games[game.channel_id]
 
 
 @bot.tree.command(name="status", description="Check current game status")
@@ -896,6 +993,19 @@ async def status(interaction: discord.Interaction):
         inline=False
     )
 
+    await interaction.response.send_message(embed=embed)
+
+
+@bot.tree.command(name="stats", description="View game statistics")
+async def stats_command(interaction: discord.Interaction):
+    """Show game statistics"""
+    game = get_game(interaction.channel_id)
+
+    if not game:
+        await interaction.response.send_message("⚠️ No game in progress.", ephemeral=True)
+        return
+
+    embed = game.format_stats()
     await interaction.response.send_message(embed=embed)
 
 
@@ -941,7 +1051,7 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(
         name="⚡ Extra Points (After TD)",
         value=(
-            "**`/1pt`** - Kick (85% success) → 7 total\n"
+            "**`/1pt`** - Kick (95% success) → 7 total\n"
             "**`/2pt`** - Go for 2 (40% success) → 8 total"
         ),
         inline=False
@@ -952,6 +1062,7 @@ async def help_command(interaction: discord.Interaction):
         name="🔧 Utility",
         value=(
             "**`/status`** - Check current game state\n"
+            "**`/stats`** - View game statistics\n"
             "**`/endgame`** - End current game\n"
             "**`/help`** - Show this message"
         ),
