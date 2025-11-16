@@ -132,14 +132,6 @@ async def newgame(interaction: discord.Interaction, opponent: discord.User):
         )
         return
 
-    # Can't play against yourself
-    if opponent.id == interaction.user.id:
-        await interaction.response.send_message(
-            "⚠️ You can't play against yourself!",
-            ephemeral=True
-        )
-        return
-
     # Can't play against bots
     if opponent.bot:
         await interaction.response.send_message(
