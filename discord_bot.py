@@ -251,12 +251,32 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
     """Execute a drive with the chosen style"""
     from gridiron_dice import (
         TABLES, TURNOVER_THRESHOLDS, advance, is_safety, is_td_yardage,
-        roll_time_for_td, FIELD_GOAL_DISTANCE
+        roll_time_for_td, time_for_required_yards, FIELD_GOAL_DISTANCE
     )
 
     # Roll for drive outcome
     roll = random.randint(1, 20)
     y, t = TABLES[style][roll - 1]
+
+    # For TD rows, need to roll time to check if it expires
+    if y == "TD":
+        yards_needed = yards_to_endzone(game.possession, game.field_position)
+        t = roll_time_for_td(style, yards_needed)
+
+    # Check if time expires during this drive
+    time_expired = False
+    if game.blocks_left - t <= 0:
+        # Find the minimum time row that still expires the clock
+        time_expired = True
+        min_time_row = None
+        for yds, time in TABLES[style]:
+            if yds != "TD" and game.blocks_left - time <= 0:
+                if min_time_row is None or time < min_time_row[1]:
+                    min_time_row = (yds, time)
+
+        # If we found a valid row, use it; otherwise keep the rolled result
+        if min_time_row:
+            y, t = min_time_row
 
     # Roll for turnover (do the roll here so we can show the actual roll used)
     turnover_roll = random.randint(1, 20)
@@ -272,8 +292,8 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
 
     # Handle TD row
     if y == "TD":
-        yards_needed = yards_to_endzone(game.possession, game.field_position)
-        time_spent = roll_time_for_td(style, yards_needed)
+        # Time was already rolled earlier to check for expiration
+        time_spent = t
 
         embed.add_field(name="Drive Roll", value=f"🎲 Rolled **{roll}** → TD!", inline=False)
         embed.add_field(name="Turnover Check", value=f"🎲 Rolled **{turnover_roll}**", inline=True)
@@ -359,9 +379,9 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                         inline=False
                     )
 
+                    # For non-TD rows that reach endzone, use time from minimum yardage row
                     yards_needed = yards_to_endzone(game.possession, game.field_position)
-                    td_time = roll_time_for_td(style, yards_needed)
-                    time_spent = min(time_spent, td_time)
+                    time_spent = time_for_required_yards(style, yards_needed)
 
                     game.blocks_left -= time_spent
                     opponent_20 = 20 if opponent == "Bombers" else 80
@@ -389,10 +409,9 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                 embed.add_field(name="Result", value="✅ Safe!", inline=True)
 
                 if is_td_yardage(game.possession, end_x):
-                    # TD by yardage
+                    # TD by yardage - use time from minimum yardage row needed for TD
                     yards_needed = yards_to_endzone(game.possession, game.field_position)
-                    td_time = roll_time_for_td(style, yards_needed)
-                    time_spent = min(time_spent, td_time)
+                    time_spent = time_for_required_yards(style, yards_needed)
 
                     embed.add_field(
                         name="Outcome",
@@ -413,51 +432,102 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                         inline=False
                     )
                 else:
-                    # No TD - 4th down situation
+                    # No TD - check if time expired
                     game.field_position = end_x
                     game.blocks_left -= time_spent
                     game.yards_gained_on_drive = yards
 
-                    # Calculate 4th down distance
-                    distance_to_goal = yards_to_endzone(game.possession, end_x)
+                    if time_expired and game.blocks_left <= 0:
+                        # Time expired - final play scenario
+                        game.blocks_left = 0
+                        distance_to_goal = yards_to_endzone(game.possession, end_x)
 
-                    if yards < 10:
-                        ytg = 10 - yards
+                        # Calculate yards to go for the final play
+                        if yards < 10:
+                            ytg = 10 - yards
+                        else:
+                            if style == "run":
+                                ytg = random.randint(1, 8)
+                            elif style == "balanced":
+                                ytg = random.randint(1, 10)
+                            else:  # pass
+                                ytg = random.randint(1, 20)
+
+                        if ytg >= distance_to_goal:
+                            ytg = distance_to_goal
+                            game.is_4th_and_goal = True
+                        else:
+                            game.is_4th_and_goal = False
+
+                        game.yards_to_go = ytg
+                        game.awaiting_action = "final_play"
+
+                        embed.add_field(
+                            name="Field Position",
+                            value=format_field_position(game),
+                            inline=False
+                        )
+                        embed.add_field(name="Score", value=game.format_score(), inline=True)
+                        embed.add_field(name="Time", value="⏰ **TIME EXPIRED - 1 Second Remaining**", inline=True)
+
+                        situation = "goal" if game.is_4th_and_goal else f"{ytg}"
+                        embed.add_field(
+                            name="Final Play",
+                            value=f"**4th and {situation}**\nOne final play available!",
+                            inline=False
+                        )
+
+                        # Final play options: field goal or go for it (no punt)
+                        options = ["`/goforit`"]
+                        if within_fg_range(game.possession, end_x):
+                            options.append("`/fieldgoal`")
+
+                        embed.add_field(
+                            name="Options",
+                            value=f"{game.current_player_with_team()}: {' | '.join(options)}",
+                            inline=False
+                        )
                     else:
-                        if style == "run":
-                            ytg = random.randint(1, 8)
-                        elif style == "balanced":
-                            ytg = random.randint(1, 10)
-                        else:  # pass
-                            ytg = random.randint(1, 20)
+                        # Normal 4th down situation
+                        distance_to_goal = yards_to_endzone(game.possession, end_x)
 
-                    if ytg >= distance_to_goal:
-                        ytg = distance_to_goal
-                        game.is_4th_and_goal = True
-                    else:
-                        game.is_4th_and_goal = False
+                        if yards < 10:
+                            ytg = 10 - yards
+                        else:
+                            if style == "run":
+                                ytg = random.randint(1, 8)
+                            elif style == "balanced":
+                                ytg = random.randint(1, 10)
+                            else:  # pass
+                                ytg = random.randint(1, 20)
 
-                    game.yards_to_go = ytg
-                    game.awaiting_action = "4th_down"
+                        if ytg >= distance_to_goal:
+                            ytg = distance_to_goal
+                            game.is_4th_and_goal = True
+                        else:
+                            game.is_4th_and_goal = False
 
-                    embed.add_field(
-                        name="Field Position",
-                        value=format_field_position(game),
-                        inline=False
-                    )
+                        game.yards_to_go = ytg
+                        game.awaiting_action = "4th_down"
 
-                    situation = "goal" if game.is_4th_and_goal else f"{ytg}"
-                    embed.add_field(
-                        name="4th Down",
-                        value=f"**4th and {situation}**",
-                        inline=False
-                    )
+                        embed.add_field(
+                            name="Field Position",
+                            value=format_field_position(game),
+                            inline=False
+                        )
 
-                    # Determine available options
-                    options = ["`/goforit`"]
-                    if within_fg_range(game.possession, end_x):
-                        options.append("`/fieldgoal`")
-                    options.append("`/punt`")
+                        situation = "goal" if game.is_4th_and_goal else f"{ytg}"
+                        embed.add_field(
+                            name="4th Down",
+                            value=f"**4th and {situation}**",
+                            inline=False
+                        )
+
+                        # Determine available options
+                        options = ["`/goforit`"]
+                        if within_fg_range(game.possession, end_x):
+                            options.append("`/fieldgoal`")
+                        options.append("`/punt`")
 
                     embed.add_field(name="Score", value=game.format_score(), inline=True)
                     embed.add_field(name="Time", value=game.format_time(), inline=True)
@@ -507,12 +577,14 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
         )
         return
 
-    if game.awaiting_action != "4th_down":
+    if game.awaiting_action not in ["4th_down", "final_play"]:
         await interaction.response.send_message(
             f"⚠️ Not the right time for this command.",
             ephemeral=True
         )
         return
+
+    is_final_play = (game.awaiting_action == "final_play")
 
     from gridiron_dice import punt_spot, missed_fg_spot, kickoff_position
 
@@ -520,12 +592,14 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
     embed = discord.Embed(title=f"🏈 4TH DOWN", color=discord.Color.orange())
 
     if decision == "goforit":
-        # Attempt 4th down conversion
+        # Attempt 4th down conversion - roll here so we can show the actual roll
+        roll = random.randint(1, 20)
+        from gridiron_dice import FOURTH_DOWN_CONVERSION
+
         success, yards_gained, is_td, new_x, is_first_down = attempt_fourth_down(
-            game.possession, game.field_position, game.yards_to_go
+            game.possession, game.field_position, game.yards_to_go, roll
         )
 
-        roll = random.randint(1, 20)
         embed.add_field(name="Attempt", value=f"🎲 Rolled **{roll}** on conversion table", inline=False)
         embed.add_field(name="Result", value=f"**{yards_gained if yards_gained != 'TD' else 'TOUCHDOWN!'}** yards gained", inline=False)
 
@@ -622,6 +696,10 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
             )
 
     else:  # punt
+        if is_final_play:
+            await interaction.response.send_message("⚠️ Cannot punt on final play of half!", ephemeral=True)
+            return
+
         spot = punt_spot(game.possession, game.field_position)
         embed.add_field(name="Result", value="📤 **PUNT**", inline=False)
         embed.add_field(name="Ball Placement", value=f"{opponent} gets ball at {relative_position(opponent, spot)}", inline=False)
@@ -637,6 +715,10 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
         )
 
     await interaction.response.send_message(embed=embed)
+
+    # Check if this was the final play and end the half
+    if is_final_play and game.blocks_left <= 0:
+        await end_half(interaction.channel, game)
 
 
 @bot.tree.command(name="1pt", description="Attempt 1-point conversion (~85% success)")

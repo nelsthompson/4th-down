@@ -359,14 +359,15 @@ def should_go_for_it(team: str, x: int, score: Dict[str, int], blocks_left: int,
     # Random decision based on probability
     return random.random() < go_for_it_prob, yards_to_go, fourth_and_goal
 
-def attempt_fourth_down(team: str, x: int, yards_to_go: int) -> tuple:
+def attempt_fourth_down(team: str, x: int, yards_to_go: int, roll: int = None) -> tuple:
     """
     Attempt a 4th down conversion using the d20 conversion table.
     Returns: (success: bool, yards_gained: int/str, is_td: bool, new_x: int, is_first_down: bool)
     """
-    # Roll d20 for attempt (1-20)
-    attempt_roll = random.randint(1, 20)
-    result = FOURTH_DOWN_CONVERSION[attempt_roll - 1]
+    # Use provided roll or roll d20 for attempt (1-20)
+    if roll is None:
+        roll = random.randint(1, 20)
+    result = FOURTH_DOWN_CONVERSION[roll - 1]
 
     # Handle TD result
     if result == "TD":
