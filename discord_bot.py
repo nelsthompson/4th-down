@@ -206,6 +206,36 @@ def format_field_position(game: GameState) -> str:
     return f"**Field Position:** {marker} {rel_pos} ({goal_info})"
 
 
+def should_offer_final_play(game: GameState, team: str, position: int) -> bool:
+    """
+    Determine if a final play should be offered when time expires.
+
+    Rules:
+    - 1st half: Offer if within 50 yards of goal (at midfield or better)
+    - 2nd half: Offer if losing/tied AND within 50 yards of goal
+    - Position check: Bombers need x >= 50, Gunners need x <= 50
+    """
+    # Check if position is within 50 yards of goal (at midfield or better)
+    if team == "Bombers":
+        in_range = position >= 50
+    else:  # Gunners
+        in_range = position <= 50
+
+    if not in_range:
+        return False
+
+    # First half: always offer (if in range)
+    if game.half == 1:
+        return True
+
+    # Second half: only if losing or tied
+    opponent = "Gunners" if team == "Bombers" else "Bombers"
+    team_score = game.score[team]
+    opponent_score = game.score[opponent]
+
+    return team_score <= opponent_score  # Losing or tied
+
+
 @bot.event
 async def on_ready():
     """Bot startup"""
@@ -363,15 +393,15 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
         # Time was already rolled earlier to check for expiration
         time_spent = t
 
-        embed.add_field(name="Drive Roll", value=f"🎲 Rolled **{roll}** → TD!", inline=False)
+        embed.add_field(name="Drive Roll", value=f"🎲 Rolled **{roll}**", inline=True)
         embed.add_field(name="Turnover Check", value=f"🎲 Rolled **{turnover_roll}**", inline=True)
 
         if turnover_occurred:
-            # Turnover on would-be TD
-            embed.add_field(name="Result", value="❌ **TURNOVER!**", inline=True)
+            # Touchback - turnover on would-be TD
+            embed.add_field(name="Result", value="❌ **TOUCHBACK!**", inline=False)
             embed.add_field(
                 name="Outcome",
-                value=f"Would have been a TD, but turnover! {opponent} gets ball at -20.",
+                value=f"{opponent} gets ball at -20.",
                 inline=False
             )
 
@@ -383,15 +413,34 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
 
             embed.add_field(name="Score", value=game.format_score(), inline=True)
             embed.add_field(name="Time", value=game.format_time(), inline=True)
-            embed.add_field(
-                name="Next",
-                value=f"{game.current_player_with_team()}'s turn at -20.\nChoose: `/balanced` | `/run` | `/pass`",
-                inline=False
-            )
+
+            # Check if time expired and opponent should get final play
+            if game.blocks_left <= 0 and should_offer_final_play(game, opponent, opponent_20):
+                game.blocks_left = 0
+                game.yards_to_go = 20  # Distance to goal from their 20
+                game.is_4th_and_goal = False
+                game.awaiting_action = "final_play"
+
+                options = []
+                if within_fg_range(opponent, opponent_20):
+                    options.append("`/fieldgoal`")
+                options.append("`/goforit`")
+
+                embed.add_field(
+                    name="Final Play",
+                    value=f"Time expired! One final play available.\n{game.current_player_with_team()}: {' | '.join(options)}",
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="Next",
+                    value=f"{game.current_player_with_team()}'s turn at -20.\nChoose: `/balanced` | `/run` | `/pass`",
+                    inline=False
+                )
         else:
             # Touchdown!
             yards_gained = yards_to_endzone(game.possession, game.field_position)
-            embed.add_field(name="Result", value="✅ Safe!", inline=True)
+            embed.add_field(name="Result", value=f"✅ **TD!** {yards_gained} yards, {time_spent} blocks", inline=False)
             embed.add_field(
                 name="Outcome",
                 value=f"🎉 **TOUCHDOWN!** {game.possession} +6",
@@ -417,14 +466,14 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
         yards = y
 
         embed.add_field(name="Drive Roll", value=f"🎲 Rolled **{roll}**", inline=True)
-        embed.add_field(name="Result", value=f"**{yards:+d}** yards, **{time_spent}** time blocks", inline=True)
+        embed.add_field(name="Turnover Check", value=f"🎲 Rolled **{turnover_roll}**", inline=True)
 
         # Calculate end position
         end_x = advance(game.possession, game.field_position, yards)
 
         # Check for safety
         if is_safety(game.possession, end_x):
-            embed.add_field(name="Turnover Check", value=f"🎲 Rolled **{turnover_roll}**", inline=False)
+            embed.add_field(name="Result", value=f"**{yards:+d}** yards, **{time_spent}** blocks", inline=False)
             embed.add_field(name="Outcome", value=f"⚠️ **SAFETY!** {opponent} +2", inline=False)
 
             game.score[opponent] += 2
@@ -432,26 +481,45 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
             game.stats[game.possession]["yards"] += yards
             game.stats[game.possession]["time_of_possession"] += time_spent
             game.stats[game.possession]["turnovers"] += 1  # Safety counts as turnover
-            game.switch_possession(opponent, kickoff_position(opponent))
+            opponent_30 = kickoff_position(opponent)
+            game.switch_possession(opponent, opponent_30)
 
             embed.add_field(name="Score", value=game.format_score(), inline=True)
             embed.add_field(name="Time", value=game.format_time(), inline=True)
-            embed.add_field(
-                name="Next",
-                value=f"{game.current_player_with_team()}'s turn at -30.\nChoose: `/balanced` | `/run` | `/pass`",
-                inline=False
-            )
+
+            # Check if time expired and opponent should get final play
+            if game.blocks_left <= 0 and should_offer_final_play(game, opponent, opponent_30):
+                game.blocks_left = 0
+                game.yards_to_go = 30  # Distance to goal from their 30
+                game.is_4th_and_goal = False
+                game.awaiting_action = "final_play"
+
+                options = []
+                if within_fg_range(opponent, opponent_30):
+                    options.append("`/fieldgoal`")
+                options.append("`/goforit`")
+
+                embed.add_field(
+                    name="Final Play",
+                    value=f"Time expired! One final play available.\n{game.current_player_with_team()}: {' | '.join(options)}",
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name="Next",
+                    value=f"{game.current_player_with_team()}'s turn at -30.\nChoose: `/balanced` | `/run` | `/pass`",
+                    inline=False
+                )
         else:
             # Check for turnover
-            embed.add_field(name="Turnover Check", value=f"🎲 Rolled **{turnover_roll}**", inline=True)
-
             if turnover_occurred:
                 # Check if would have been TD
                 if is_td_yardage(game.possession, end_x):
-                    embed.add_field(name="Result", value="❌ **TURNOVER!**", inline=True)
+                    yards_needed = yards_to_endzone(game.possession, game.field_position)
+                    embed.add_field(name="Result", value=f"❌ **TOUCHBACK!** ({yards_needed} yards, {time_spent} blocks)", inline=False)
                     embed.add_field(
                         name="Outcome",
-                        value=f"Would have been a TD, but turnover! {opponent} gets ball at -20.",
+                        value=f"{opponent} gets ball at -20.",
                         inline=False
                     )
 
@@ -465,8 +533,35 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                     game.stats[game.possession]["turnovers"] += 1
                     opponent_20 = 20 if opponent == "Bombers" else 80
                     game.switch_possession(opponent, opponent_20)
+
+                    embed.add_field(name="Score", value=game.format_score(), inline=True)
+                    embed.add_field(name="Time", value=game.format_time(), inline=True)
+
+                    # Check if time expired and opponent should get final play
+                    if game.blocks_left <= 0 and should_offer_final_play(game, opponent, opponent_20):
+                        game.blocks_left = 0
+                        game.yards_to_go = 20  # Distance to goal from their 20
+                        game.is_4th_and_goal = False
+                        game.awaiting_action = "final_play"
+
+                        options = []
+                        if within_fg_range(opponent, opponent_20):
+                            options.append("`/fieldgoal`")
+                        options.append("`/goforit`")
+
+                        embed.add_field(
+                            name="Final Play",
+                            value=f"Time expired! One final play available.\n{game.current_player_with_team()}: {' | '.join(options)}",
+                            inline=False
+                        )
+                    else:
+                        embed.add_field(
+                            name="Next",
+                            value=f"{game.current_player_with_team()}'s turn at -20.\nChoose: `/balanced` | `/run` | `/pass`",
+                            inline=False
+                        )
                 else:
-                    embed.add_field(name="Result", value="❌ **TURNOVER!**", inline=True)
+                    embed.add_field(name="Result", value=f"❌ **TURNOVER!** ({yards:+d} yards, {time_spent} blocks)", inline=False)
                     embed.add_field(
                         name="Outcome",
                         value=f"{opponent} gets ball at {relative_position(opponent, end_x)}.",
@@ -479,22 +574,41 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                     game.stats[game.possession]["turnovers"] += 1
                     game.switch_possession(opponent, end_x)
 
-                embed.add_field(name="Score", value=game.format_score(), inline=True)
-                embed.add_field(name="Time", value=game.format_time(), inline=True)
-                embed.add_field(
-                    name="Next",
-                    value=f"{game.current_player_with_team()}'s turn.\nChoose: `/balanced` | `/run` | `/pass`",
-                    inline=False
-                )
+                    embed.add_field(name="Score", value=game.format_score(), inline=True)
+                    embed.add_field(name="Time", value=game.format_time(), inline=True)
+
+                    # Check if time expired and opponent should get final play
+                    if game.blocks_left <= 0 and should_offer_final_play(game, opponent, end_x):
+                        game.blocks_left = 0
+                        distance_to_goal = yards_to_endzone(opponent, end_x)
+                        game.yards_to_go = distance_to_goal
+                        game.is_4th_and_goal = False
+                        game.awaiting_action = "final_play"
+
+                        options = []
+                        if within_fg_range(opponent, end_x):
+                            options.append("`/fieldgoal`")
+                        options.append("`/goforit`")
+
+                        embed.add_field(
+                            name="Final Play",
+                            value=f"Time expired! One final play available.\n{game.current_player_with_team()}: {' | '.join(options)}",
+                            inline=False
+                        )
+                    else:
+                        embed.add_field(
+                            name="Next",
+                            value=f"{game.current_player_with_team()}'s turn.\nChoose: `/balanced` | `/run` | `/pass`",
+                            inline=False
+                        )
             else:
                 # No turnover - check for TD
-                embed.add_field(name="Result", value="✅ Safe!", inline=True)
-
                 if is_td_yardage(game.possession, end_x):
                     # TD by yardage - use time from minimum yardage row needed for TD
                     yards_needed = yards_to_endzone(game.possession, game.field_position)
                     time_spent = time_for_required_yards(style, yards_needed)
 
+                    embed.add_field(name="Result", value=f"✅ **TD!** {yards_needed} yards, {time_spent} blocks", inline=False)
                     embed.add_field(
                         name="Outcome",
                         value=f"🎉 **TOUCHDOWN!** {game.possession} +6",
@@ -517,6 +631,8 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                     )
                 else:
                     # No TD - check if time expired
+                    embed.add_field(name="Result", value=f"✅ Safe! **{yards:+d}** yards, **{time_spent}** blocks", inline=False)
+
                     game.field_position = end_x
                     game.blocks_left -= time_spent
                     game.stats[game.possession]["yards"] += yards
@@ -524,50 +640,62 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                     game.yards_gained_on_drive = yards
 
                     if time_expired and game.blocks_left <= 0:
-                        # Time expired - final play scenario
+                        # Time expired - check if final play should be offered
                         game.blocks_left = 0
-                        distance_to_goal = yards_to_endzone(game.possession, end_x)
 
-                        # Calculate yards to go for the final play
-                        if yards < 10:
-                            ytg = 10 - yards
+                        if should_offer_final_play(game, game.possession, end_x):
+                            # Offer final play
+                            distance_to_goal = yards_to_endzone(game.possession, end_x)
+
+                            # Calculate yards to go for the final play
+                            if yards < 10:
+                                ytg = 10 - yards
+                            else:
+                                if style == "run":
+                                    ytg = random.randint(1, 8)
+                                elif style == "balanced":
+                                    ytg = random.randint(1, 10)
+                                else:  # pass
+                                    ytg = random.randint(1, 20)
+
+                            if ytg >= distance_to_goal:
+                                ytg = distance_to_goal
+                                game.is_4th_and_goal = True
+                            else:
+                                game.is_4th_and_goal = False
+
+                            game.yards_to_go = ytg
+                            game.awaiting_action = "final_play"
+
+                            embed.add_field(
+                                name="Field Position",
+                                value=format_field_position(game),
+                                inline=False
+                            )
+                            embed.add_field(name="Score", value=game.format_score(), inline=True)
+                            embed.add_field(name="Time", value="⏰ **TIME EXPIRED - 1 Second Remaining**", inline=True)
+                            embed.add_field(name="Drive Elapsed", value=game.format_drive_elapsed(), inline=True)
+
+                            # Final play options: field goal or go for it (no punt)
+                            options = []
+                            if within_fg_range(game.possession, end_x):
+                                options.append("`/fieldgoal`")
+                            options.append("`/goforit`")
+
+                            embed.add_field(
+                                name="Final Play",
+                                value=f"Time expired! One final play available.\n{game.current_player_with_team()}: {' | '.join(options)}",
+                                inline=False
+                            )
                         else:
-                            if style == "run":
-                                ytg = random.randint(1, 8)
-                            elif style == "balanced":
-                                ytg = random.randint(1, 10)
-                            else:  # pass
-                                ytg = random.randint(1, 20)
-
-                        if ytg >= distance_to_goal:
-                            ytg = distance_to_goal
-                            game.is_4th_and_goal = True
-                        else:
-                            game.is_4th_and_goal = False
-
-                        game.yards_to_go = ytg
-                        game.awaiting_action = "final_play"
-
-                        embed.add_field(
-                            name="Field Position",
-                            value=format_field_position(game),
-                            inline=False
-                        )
-                        embed.add_field(name="Score", value=game.format_score(), inline=True)
-                        embed.add_field(name="Time", value="⏰ **TIME EXPIRED - 1 Second Remaining**", inline=True)
-                        embed.add_field(name="Drive Elapsed", value=game.format_drive_elapsed(), inline=True)
-
-                        # Final play options: field goal or go for it (no punt)
-                        options = []
-                        if within_fg_range(game.possession, end_x):
-                            options.append("`/fieldgoal`")
-                        options.append("`/goforit`")
-
-                        embed.add_field(
-                            name="Final Play",
-                            value=f"Time expired! One final play available.\n{game.current_player_with_team()}: {' | '.join(options)}",
-                            inline=False
-                        )
+                            # Don't offer final play - just show field position and end half
+                            embed.add_field(
+                                name="Field Position",
+                                value=format_field_position(game),
+                                inline=False
+                            )
+                            embed.add_field(name="Score", value=game.format_score(), inline=True)
+                            embed.add_field(name="Time", value="⏰ **TIME EXPIRED**", inline=True)
                     else:
                         # Normal 4th down situation
                         distance_to_goal = yards_to_endzone(game.possession, end_x)
