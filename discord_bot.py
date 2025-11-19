@@ -31,7 +31,8 @@ games: Dict[int, dict] = {}
 class GameState:
     """Manages the state of an ongoing game"""
 
-    def __init__(self, channel_id: int, player1: discord.Member, player2: discord.Member):
+    def __init__(self, channel_id: int, player1: discord.Member, player2: discord.Member,
+                 team1_name: str = "Bombers", team2_name: str = "Gunners"):
         self.channel_id = channel_id
 
         # Randomly assign teams
@@ -42,19 +43,29 @@ class GameState:
             self.bombers_player = player2
             self.gunners_player = player1
 
+        # Team names (internal keys are still Bombers/Gunners, but we display custom names)
+        self.team_names = {
+            "Bombers": team1_name,
+            "Gunners": team2_name
+        }
+
+        # Coin flip to determine first possession
+        first_possession = "Bombers" if random.random() < 0.5 else "Gunners"
+        self.first_half_receiver = first_possession  # Track who received first
+
         # Game state
         self.score = {"Bombers": 0, "Gunners": 0}
         self.half = 1
         self.blocks_left = BLOCKS_PER_HALF
-        self.possession = "Bombers"  # Who has the ball
-        self.field_position = 30  # Current yard line
+        self.possession = first_possession  # Who has the ball (determined by coin flip)
+        self.field_position = kickoff_position(first_possession)
         self.drive_start_blocks = BLOCKS_PER_HALF  # Track when current drive started
 
-        # Stats tracking
+        # Stats tracking (first receiver starts with 1 possession)
         self.stats = {
             "Bombers": {
                 "yards": 0,
-                "possessions": 1,  # Start with 1 for opening possession
+                "possessions": 1 if first_possession == "Bombers" else 0,
                 "time_of_possession": 0,
                 "fgs_made": 0,
                 "fgs_missed": 0,
@@ -63,7 +74,7 @@ class GameState:
             },
             "Gunners": {
                 "yards": 0,
-                "possessions": 0,
+                "possessions": 1 if first_possession == "Gunners" else 0,
                 "time_of_possession": 0,
                 "fgs_made": 0,
                 "fgs_missed": 0,
@@ -89,7 +100,8 @@ class GameState:
 
     def current_player_with_team(self) -> str:
         """Get formatted string with player and their team"""
-        return f"{self.current_player().mention} ({self.possession})"
+        team_display_name = self.team_names[self.possession]
+        return f"{self.current_player().mention} ({team_display_name})"
 
     def switch_possession(self, new_team: str, new_position: int):
         """Switch possession to the other team"""
@@ -105,7 +117,9 @@ class GameState:
 
     def format_score(self) -> str:
         """Format current score with team names"""
-        return f"**Bombers {self.score['Bombers']} - {self.score['Gunners']} Gunners**"
+        bombers_name = self.team_names["Bombers"]
+        gunners_name = self.team_names["Gunners"]
+        return f"**{bombers_name} {self.score['Bombers']} - {self.score['Gunners']} {gunners_name}**"
 
     def format_time(self) -> str:
         """Format time remaining"""
@@ -130,6 +144,8 @@ class GameState:
 
         bombers_stats = self.stats["Bombers"]
         gunners_stats = self.stats["Gunners"]
+        bombers_name = self.team_names["Bombers"][:10]  # Truncate to fit
+        gunners_name = self.team_names["Gunners"][:10]
 
         # Format time of possession
         b_top_min = bombers_stats["time_of_possession"] // 6
@@ -140,7 +156,7 @@ class GameState:
         # Create stats table
         stats_text = (
             f"```\n"
-            f"{'Stat':<20} {'Bombers':>10} {'Gunners':>10}\n"
+            f"{'Stat':<20} {bombers_name:>10} {gunners_name:>10}\n"
             f"{'-'*42}\n"
             f"{'Total Yards':<20} {bombers_stats['yards']:>10} {gunners_stats['yards']:>10}\n"
             f"{'Possessions':<20} {bombers_stats['possessions']:>10} {gunners_stats['possessions']:>10}\n"
@@ -248,9 +264,14 @@ async def on_ready():
 
 
 @bot.tree.command(name="newgame", description="Start a new game of 4th Down")
-@app_commands.describe(opponent="The player you want to play against")
+@app_commands.describe(
+    opponent="The player you want to play against",
+    team1_name="Your team name (optional, default: Bombers)",
+    team2_name="Opponent's team name (optional, default: Gunners)"
+)
 @app_commands.guild_only()  # Ensure this command only works in servers
-async def newgame(interaction: discord.Interaction, opponent: discord.User):
+async def newgame(interaction: discord.Interaction, opponent: discord.User,
+                  team1_name: str = "Bombers", team2_name: str = "Gunners"):
     """Start a new game"""
     channel_id = interaction.channel_id
 
@@ -271,20 +292,25 @@ async def newgame(interaction: discord.Interaction, opponent: discord.User):
         return
 
     # Create new game - interaction.user is already a Member in guild context
-    game = GameState(channel_id, interaction.user, opponent)
+    game = GameState(channel_id, interaction.user, opponent, team1_name, team2_name)
     games[channel_id] = game
 
-    # Announce game start
+    # Announce game start with coin flip result
+    bombers_name = game.team_names["Bombers"]
+    gunners_name = game.team_names["Gunners"]
+    receiving_team = game.team_names[game.possession]
+
     embed = discord.Embed(
         title="🏈 NEW GAME STARTED! 🏈",
-        description=f"**{game.bombers_player.mention}** (Bombers) vs **{game.gunners_player.mention}** (Gunners)",
+        description=f"**{game.bombers_player.mention}** ({bombers_name}) vs **{game.gunners_player.mention}** ({gunners_name})",
         color=discord.Color.green()
     )
+    embed.add_field(name="Coin Flip", value=f"🪙 **{receiving_team}** wins the toss!", inline=False)
     embed.add_field(name="Score", value=game.format_score(), inline=True)
     embed.add_field(name="Time", value=game.format_time(), inline=True)
     embed.add_field(
         name="Kickoff",
-        value=f"{game.possession} receive at -30",
+        value=f"{receiving_team} receives at -30",
         inline=False
     )
     embed.add_field(
@@ -443,7 +469,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
             embed.add_field(name="Result", value=f"✅ **TD!** {yards_gained} yards, {time_spent} blocks", inline=False)
             embed.add_field(
                 name="Outcome",
-                value=f"🎉 **TOUCHDOWN!** {game.possession} +6",
+                value=f"🎉 **TOUCHDOWN!** {game.team_names[game.possession]} +6",
                 inline=False
             )
 
@@ -611,7 +637,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                     embed.add_field(name="Result", value=f"✅ **TD!** {yards_needed} yards, {time_spent} blocks", inline=False)
                     embed.add_field(
                         name="Outcome",
-                        value=f"🎉 **TOUCHDOWN!** {game.possession} +6",
+                        value=f"🎉 **TOUCHDOWN!** {game.team_names[game.possession]} +6",
                         inline=False
                     )
 
@@ -814,7 +840,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
         embed.add_field(name="Result", value=f"**{yards_gained:+d}** yards gained", inline=False)
 
         if is_td:
-            embed.add_field(name="Outcome", value=f"🎉 **TOUCHDOWN!** {game.possession} +6", inline=False)
+            embed.add_field(name="Outcome", value=f"🎉 **TOUCHDOWN!** {game.team_names[game.possession]} +6", inline=False)
             game.score[game.possession] += 6
             game.field_position = new_x
             game.awaiting_action = "extra_point"
@@ -1039,14 +1065,14 @@ async def end_half(channel, game: GameState):
         game.blocks_left = BLOCKS_PER_HALF
         game.drive_start_blocks = BLOCKS_PER_HALF  # Reset drive start for new half
 
-        # Switch possession (team that kicked off in H1 receives in H2)
-        # Bombers received first, so Gunners receive second half
-        second_half_receiver = "Gunners"
+        # Switch possession (team that didn't receive in H1 receives in H2)
+        second_half_receiver = "Gunners" if game.first_half_receiver == "Bombers" else "Bombers"
+        second_half_receiver_name = game.team_names[second_half_receiver]
         game.switch_possession(second_half_receiver, kickoff_position(second_half_receiver))
 
         embed.add_field(
             name="Second Half Kickoff",
-            value=f"{second_half_receiver} receive at -30.",
+            value=f"{second_half_receiver_name} receives at -30.",
             inline=False
         )
         embed.add_field(
@@ -1058,13 +1084,15 @@ async def end_half(channel, game: GameState):
         # Game over
         bombers_score = game.score["Bombers"]
         gunners_score = game.score["Gunners"]
+        bombers_name = game.team_names["Bombers"]
+        gunners_name = game.team_names["Gunners"]
 
         if bombers_score > gunners_score:
             winner = game.bombers_player.mention
-            result = f"🏆 **{winner} (Bombers) WINS!** 🏆"
+            result = f"🏆 **{winner} ({bombers_name}) WINS!** 🏆"
         elif gunners_score > bombers_score:
             winner = game.gunners_player.mention
-            result = f"🏆 **{winner} (Gunners) WINS!** 🏆"
+            result = f"🏆 **{winner} ({gunners_name}) WINS!** 🏆"
         else:
             result = "🤝 **TIE GAME!** 🤝"
 
@@ -1095,9 +1123,12 @@ async def status(interaction: discord.Interaction):
         color=discord.Color.blue()
     )
 
+    bombers_name = game.team_names["Bombers"]
+    gunners_name = game.team_names["Gunners"]
+
     embed.add_field(
         name="Matchup",
-        value=f"{game.bombers_player.mention} (Bombers) vs {game.gunners_player.mention} (Gunners)",
+        value=f"{game.bombers_player.mention} ({bombers_name}) vs {game.gunners_player.mention} ({gunners_name})",
         inline=False
     )
     embed.add_field(name="Score", value=game.format_score(), inline=True)
