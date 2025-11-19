@@ -266,12 +266,11 @@ async def on_ready():
 @bot.tree.command(name="newgame", description="Start a new game of 4th Down")
 @app_commands.describe(
     opponent="The player you want to play against",
-    team1_name="Your team name (optional, default: Bombers)",
-    team2_name="Opponent's team name (optional, default: Gunners)"
+    team_name="Your team name (optional, default: Bombers)"
 )
 @app_commands.guild_only()  # Ensure this command only works in servers
 async def newgame(interaction: discord.Interaction, opponent: discord.User,
-                  team1_name: str = "Bombers", team2_name: str = "Gunners"):
+                  team_name: str = "Bombers"):
     """Start a new game"""
     channel_id = interaction.channel_id
 
@@ -291,11 +290,65 @@ async def newgame(interaction: discord.Interaction, opponent: discord.User,
         )
         return
 
-    # Create new game - interaction.user is already a Member in guild context
-    game = GameState(channel_id, interaction.user, opponent, team1_name, team2_name)
+    # Create new game with placeholder for team2 name
+    # Game will be in "team2_name" awaiting state
+    game = GameState(channel_id, interaction.user, opponent, team_name, "???")
+    game.awaiting_action = "team2_name"
     games[channel_id] = game
 
-    # Announce game start with coin flip result
+    # Ask second player to name their team
+    embed = discord.Embed(
+        title="🏈 NEW GAME SETUP 🏈",
+        description=f"**{interaction.user.mention}** challenges **{opponent.mention}**!",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name=f"{interaction.user.display_name}'s Team", value=f"**{team_name}**", inline=False)
+    embed.add_field(
+        name="Waiting for Opponent",
+        value=f"{opponent.mention}, use `/nameteam team_name:\"YourTeam\"` to join!",
+        inline=False
+    )
+
+    await interaction.response.send_message(embed=embed)
+
+
+@bot.tree.command(name="nameteam", description="Name your team to join a game")
+@app_commands.describe(team_name="Your team name")
+@app_commands.guild_only()
+async def nameteam(interaction: discord.Interaction, team_name: str):
+    """Second player names their team to start the game"""
+    channel_id = interaction.channel_id
+    game = get_game(channel_id)
+
+    if not game:
+        await interaction.response.send_message("⚠️ No game waiting for team names.", ephemeral=True)
+        return
+
+    # Check if game is waiting for team2 name
+    if game.awaiting_action != "team2_name":
+        await interaction.response.send_message("⚠️ Game already started!", ephemeral=True)
+        return
+
+    # Check if this is the second player
+    if interaction.user.id != game.gunners_player.id and interaction.user.id != game.bombers_player.id:
+        await interaction.response.send_message("⚠️ You're not in this game!", ephemeral=True)
+        return
+
+    # Check if this is the first player trying to name both teams
+    player1_id = game.bombers_player.id if game.team_names["Bombers"] != "???" else game.gunners_player.id
+    if interaction.user.id == player1_id:
+        await interaction.response.send_message("⚠️ Wait for your opponent to name their team!", ephemeral=True)
+        return
+
+    # Set the team2 name based on which slot needs it
+    if game.team_names["Bombers"] == "???":
+        game.team_names["Bombers"] = team_name
+    else:
+        game.team_names["Gunners"] = team_name
+
+    # Now do coin flip and start the game
+    game.awaiting_action = "play_style"
+
     bombers_name = game.team_names["Bombers"]
     gunners_name = game.team_names["Gunners"]
     receiving_team = game.team_names[game.possession]
@@ -1177,7 +1230,11 @@ async def help_command(interaction: discord.Interaction):
     # How to start
     embed.add_field(
         name="🎮 How to Start",
-        value="Use `/newgame @opponent` to challenge someone to a game!",
+        value=(
+            "**`/newgame @opponent`** - Challenge someone to a game\n"
+            "**`/newgame @opponent team_name:\"YourTeam\"`** - Name your team\n"
+            "**`/nameteam team_name:\"YourTeam\"`** - Second player names their team"
+        ),
         inline=False
     )
 
