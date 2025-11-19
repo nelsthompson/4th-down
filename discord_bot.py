@@ -32,8 +32,9 @@ class GameState:
     """Manages the state of an ongoing game"""
 
     def __init__(self, channel_id: int, player1: discord.Member, player2: discord.Member,
-                 team1_name: str = "Bombers", team2_name: str = "Gunners"):
+                 team1_name: str = "Bombers", team2_name: str = "Gunners", is_solitaire: bool = False):
         self.channel_id = channel_id
+        self.is_solitaire = is_solitaire
 
         # Randomly assign teams
         if random.random() < 0.5:
@@ -375,6 +376,174 @@ async def nameteam(interaction: discord.Interaction, team_name: str):
     await interaction.response.send_message(embed=embed)
 
 
+@bot.tree.command(name="solitaire", description="Play against the AI bot")
+@app_commands.describe(team_name="Your team name (optional, default: Bombers)")
+@app_commands.guild_only()
+async def solitaire(interaction: discord.Interaction, team_name: str = "Bombers"):
+    """Start a solitaire game against AI"""
+    channel_id = interaction.channel_id
+
+    # Check if game already exists
+    if channel_id in games:
+        await interaction.response.send_message(
+            "⚠️ A game is already in progress in this channel! Finish it first.",
+            ephemeral=True
+        )
+        return
+
+    # Create solitaire game with bot as opponent
+    game = GameState(channel_id, interaction.user, interaction.client.user, team_name, "AI", is_solitaire=True)
+    game.awaiting_action = "play_style"
+    games[channel_id] = game
+
+    # Announce game start with coin flip result
+    bombers_name = game.team_names["Bombers"]
+    gunners_name = game.team_names["Gunners"]
+    receiving_team = game.team_names[game.possession]
+
+    embed = discord.Embed(
+        title="🏈 SOLITAIRE GAME STARTED! 🏈",
+        description=f"**{interaction.user.mention}** ({team_name}) vs **AI Bot** (AI)",
+        color=discord.Color.purple()
+    )
+    embed.add_field(name="Coin Flip", value=f"🪙 **{receiving_team}** wins the toss!", inline=False)
+    embed.add_field(name="Score", value=game.format_score(), inline=True)
+    embed.add_field(name="Time", value=game.format_time(), inline=True)
+    embed.add_field(
+        name="Kickoff",
+        value=f"{receiving_team} receives at -30",
+        inline=False
+    )
+
+    # Check if AI gets first possession
+    ai_player = game.bombers_player if game.bombers_player.bot else game.gunners_player
+
+    if game.current_player() == ai_player:
+        # AI has first possession
+        embed.add_field(
+            name="AI Turn",
+            value="AI is choosing play style...",
+            inline=False
+        )
+        await interaction.response.send_message(embed=embed)
+        # Execute AI turn
+        await execute_ai_turn(interaction.channel, game)
+    else:
+        # Player has first possession
+        embed.add_field(
+            name="First Possession",
+            value=f"{game.current_player_with_team()}, choose your play style:\n`/balanced` | `/run` | `/pass`",
+            inline=False
+        )
+        await interaction.response.send_message(embed=embed)
+
+
+async def execute_ai_turn(channel, game: GameState):
+    """Execute AI turn automatically"""
+    from gridiron_dice import choose_style, should_go_for_it, attempt_extra_point, end_of_half_decision
+    import asyncio
+
+    # Small delay for realism
+    await asyncio.sleep(1)
+
+    opponent = "Gunners" if game.possession == "Bombers" else "Bombers"
+    lead = game.score[game.possession] - game.score[opponent]
+
+    if game.awaiting_action == "play_style":
+        # AI chooses play style
+        style = choose_style(game.possession, lead, game.blocks_left)
+
+        embed = discord.Embed(
+            title=f"🤖 AI TURN - {style.upper()} OFFENSE",
+            color=discord.Color.gold()
+        )
+        await channel.send(embed=embed)
+
+        # Create a mock interaction-like object
+        class MockInteraction:
+            def __init__(self, channel_obj, game_state):
+                self.channel = channel_obj
+                self.channel_id = game_state.channel_id
+                self.user = game_state.current_player()
+
+            async def response_send_message(self, embed):
+                await self.channel.send(embed=embed)
+
+        mock_int = MockInteraction(channel, game)
+        await execute_drive(mock_int, game, style)
+
+        # Check if AI needs to go again (after kickoff, etc.)
+        await check_ai_turn(channel, game)
+
+    elif game.awaiting_action == "4th_down" or game.awaiting_action == "final_play":
+        # AI decides 4th down action
+        from gridiron_dice import within_fg_range, attempt_fourth_down, punt_spot, missed_fg_spot, kickoff_position
+
+        go_for_it_decision, yards_to_go, is_4th_and_goal = should_go_for_it(
+            game.possession, game.field_position, game.score, game.blocks_left,
+            game.half, "balanced", game.yards_gained_on_drive or 0
+        )
+
+        if go_for_it_decision:
+            decision = "goforit"
+        elif within_fg_range(game.possession, game.field_position):
+            decision = "fieldgoal"
+        else:
+            decision = "punt"
+
+        embed = discord.Embed(
+            title=f"🤖 AI TURN - {decision.upper()}",
+            color=discord.Color.gold()
+        )
+        await channel.send(embed=embed)
+
+        # Execute the decision
+        class MockInteraction:
+            def __init__(self, channel_obj, game_state):
+                self.channel = channel_obj
+                self.channel_id = game_state.channel_id
+                self.user = game_state.current_player()
+
+        mock_int = MockInteraction(channel, game)
+        await handle_fourth_down_decision(mock_int, decision)
+
+        await check_ai_turn(channel, game)
+
+    elif game.awaiting_action == "extra_point":
+        # AI decides extra point
+        opponent = "Gunners" if game.possession == "Bombers" else "Bombers"
+        points, conv_type = attempt_extra_point(game.possession, game.score, game.blocks_left, game.half)
+        go_for_two = (conv_type == "2pt")
+
+        embed = discord.Embed(
+            title=f"🤖 AI TURN - {conv_type.upper()}",
+            color=discord.Color.gold()
+        )
+        await channel.send(embed=embed)
+
+        class MockInteraction:
+            def __init__(self, channel_obj, game_state):
+                self.channel = channel_obj
+                self.channel_id = game_state.channel_id
+                self.user = game_state.current_player()
+
+        mock_int = MockInteraction(channel, game)
+        await handle_extra_point(mock_int, go_for_two)
+
+        await check_ai_turn(channel, game)
+
+
+async def check_ai_turn(channel, game: GameState):
+    """Check if it's AI's turn and execute if so"""
+    if not game.is_solitaire:
+        return
+
+    ai_player = game.bombers_player if game.bombers_player.bot else game.gunners_player
+
+    if game.current_player() == ai_player and game.awaiting_action in ["play_style", "4th_down", "extra_point", "final_play"]:
+        await execute_ai_turn(channel, game)
+
+
 @bot.tree.command(name="balanced", description="Choose Balanced offense (10% turnover, moderate yards)")
 async def balanced(interaction: discord.Interaction):
     """Choose balanced play style"""
@@ -422,6 +591,9 @@ async def handle_play_style(interaction: discord.Interaction, style: str):
 
     # Execute the drive
     await execute_drive(interaction, game, style)
+
+    # Check if AI needs to go next (solitaire mode)
+    await check_ai_turn(interaction.channel, game)
 
 
 async def execute_drive(interaction: discord.Interaction, game: GameState, style: str):
@@ -832,6 +1004,9 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
     if game.blocks_left <= 0 and game.awaiting_action != "final_play":
         await end_half(interaction.channel, game)
 
+    # Check if AI needs to go next (solitaire mode)
+    await check_ai_turn(interaction.channel, game)
+
 
 @bot.tree.command(name="goforit", description="Attempt to convert on 4th down")
 async def goforit(interaction: discord.Interaction):
@@ -1013,6 +1188,9 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
     if is_final_play and game.blocks_left <= 0:
         await end_half(interaction.channel, game)
 
+    # Check if AI needs to go next (solitaire mode)
+    await check_ai_turn(interaction.channel, game)
+
 
 @bot.tree.command(name="1pt", description="Attempt 1-point conversion (95% success)")
 async def one_point(interaction: discord.Interaction):
@@ -1099,6 +1277,9 @@ async def handle_extra_point(interaction: discord.Interaction, go_for_two: bool)
     # Check for half/game end
     if game.blocks_left <= 0:
         await end_half(interaction.channel, game)
+
+    # Check if AI needs to go next (solitaire mode)
+    await check_ai_turn(interaction.channel, game)
 
 
 async def end_half(channel, game: GameState):
@@ -1233,7 +1414,8 @@ async def help_command(interaction: discord.Interaction):
         value=(
             "**`/newgame @opponent`** - Challenge someone to a game\n"
             "**`/newgame @opponent team_name:\"YourTeam\"`** - Name your team\n"
-            "**`/nameteam team_name:\"YourTeam\"`** - Second player names their team"
+            "**`/nameteam team_name:\"YourTeam\"`** - Second player names their team\n"
+            "**`/solitaire`** - Play against the AI bot"
         ),
         inline=False
     )
