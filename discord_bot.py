@@ -392,7 +392,7 @@ async def solitaire(interaction: discord.Interaction, team_name: str = "Bombers"
         return
 
     # Create solitaire game with bot as opponent
-    game = GameState(channel_id, interaction.user, interaction.client.user, team_name, "AI", is_solitaire=True)
+    game = GameState(channel_id, interaction.user, interaction.client.user, team_name, "Agents", is_solitaire=True)
     game.awaiting_action = "play_style"
     games[channel_id] = game
 
@@ -403,7 +403,7 @@ async def solitaire(interaction: discord.Interaction, team_name: str = "Bombers"
 
     embed = discord.Embed(
         title="🏈 SOLITAIRE GAME STARTED! 🏈",
-        description=f"**{interaction.user.mention}** ({team_name}) vs **AI Bot** (AI)",
+        description=f"**{interaction.user.mention}** ({team_name}) vs **AI Bot** (Agents)",
         color=discord.Color.purple()
     )
     embed.add_field(name="Coin Flip", value=f"🪙 **{receiving_team}** wins the toss!", inline=False)
@@ -673,7 +673,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
             embed.add_field(name="Result", value="❌ **TOUCHBACK!**", inline=False)
             embed.add_field(
                 name="Outcome",
-                value=f"{opponent} gets ball at -20.",
+                value=f"{game.team_names[opponent]} gets ball at -20.",
                 inline=False
             )
 
@@ -791,7 +791,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                     embed.add_field(name="Result", value=f"❌ **TOUCHBACK!** ({yards_needed} yards, {time_spent} blocks)", inline=False)
                     embed.add_field(
                         name="Outcome",
-                        value=f"{opponent} gets ball at -20.",
+                        value=f"{game.team_names[opponent]} gets ball at -20.",
                         inline=False
                     )
 
@@ -836,7 +836,7 @@ async def execute_drive(interaction: discord.Interaction, game: GameState, style
                     embed.add_field(name="Result", value=f"❌ **TURNOVER!** ({yards:+d} yards, {time_spent} blocks)", inline=False)
                     embed.add_field(
                         name="Outcome",
-                        value=f"{opponent} gets ball at {relative_position(opponent, end_x)}.",
+                        value=f"{game.team_names[opponent]} gets ball at {relative_position(opponent, end_x)}.",
                         inline=False
                     )
 
@@ -1120,7 +1120,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
             )
         else:
             embed.add_field(name="Outcome", value=f"❌ **TURNOVER ON DOWNS**", inline=False)
-            embed.add_field(name="Result", value=f"{opponent} gets ball at {relative_position(opponent, new_x)}", inline=False)
+            embed.add_field(name="Result", value=f"{game.team_names[opponent]} gets ball at {relative_position(opponent, new_x)}", inline=False)
 
             game.switch_possession(opponent, new_x)
 
@@ -1159,7 +1159,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
             embed.add_field(name="Time", value=game.format_time(), inline=True)
             embed.add_field(
                 name="Kickoff",
-                value=f"{opponent} receives at -30.",
+                value=f"{game.team_names[opponent]} receives at -30.",
                 inline=False
             )
             embed.add_field(
@@ -1170,7 +1170,7 @@ async def handle_fourth_down_decision(interaction: discord.Interaction, decision
         else:
             miss_spot = missed_fg_spot(game.possession, game.field_position)
             embed.add_field(name="Result", value="❌ **FIELD GOAL MISS**", inline=False)
-            embed.add_field(name="Ball Placement", value=f"{opponent} gets ball at {relative_position(opponent, miss_spot)}", inline=False)
+            embed.add_field(name="Ball Placement", value=f"{game.team_names[opponent]} gets ball at {relative_position(opponent, miss_spot)}", inline=False)
 
             game.stats[game.possession]["fgs_missed"] += 1
             game.switch_possession(opponent, miss_spot)
@@ -1284,7 +1284,7 @@ async def handle_extra_point(interaction: discord.Interaction, go_for_two: bool)
     embed.add_field(name="Time", value=game.format_time(), inline=True)
     embed.add_field(
         name="Kickoff",
-        value=f"{opponent} receives at the 30.",
+        value=f"{game.team_names[opponent]} receives at the 30.",
         inline=False
     )
     embed.add_field(
