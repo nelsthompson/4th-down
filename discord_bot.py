@@ -40,15 +40,19 @@ class GameState:
         if random.random() < 0.5:
             self.bombers_player = player1
             self.gunners_player = player2
+            # Team names follow the players
+            self.team_names = {
+                "Bombers": team1_name,
+                "Gunners": team2_name
+            }
         else:
             self.bombers_player = player2
             self.gunners_player = player1
-
-        # Team names (internal keys are still Bombers/Gunners, but we display custom names)
-        self.team_names = {
-            "Bombers": team1_name,
-            "Gunners": team2_name
-        }
+            # Team names follow the players (swapped)
+            self.team_names = {
+                "Bombers": team2_name,
+                "Gunners": team1_name
+            }
 
         # Coin flip to determine first possession
         first_possession = "Bombers" if random.random() < 0.5 else "Gunners"
@@ -401,9 +405,15 @@ async def solitaire(interaction: discord.Interaction, team_name: str = "Bombers"
     gunners_name = game.team_names["Gunners"]
     receiving_team = game.team_names[game.possession]
 
+    # Determine which team the user got assigned to
+    user_team = "Bombers" if game.bombers_player.id == interaction.user.id else "Gunners"
+    ai_team = "Gunners" if user_team == "Bombers" else "Bombers"
+    user_team_name = game.team_names[user_team]
+    ai_team_name = game.team_names[ai_team]
+
     embed = discord.Embed(
         title="🏈 SOLITAIRE GAME STARTED! 🏈",
-        description=f"**{interaction.user.mention}** ({team_name}) vs **AI Bot** (Agents)",
+        description=f"**{interaction.user.mention}** ({user_team_name}) vs **AI Bot** ({ai_team_name})",
         color=discord.Color.purple()
     )
     embed.add_field(name="Coin Flip", value=f"🪙 **{receiving_team}** wins the toss!", inline=False)
