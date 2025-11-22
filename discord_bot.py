@@ -460,14 +460,19 @@ async def execute_ai_turn(channel, game: GameState):
         await channel.send(embed=embed)
 
         # Create a mock interaction-like object
+        class MockResponse:
+            def __init__(self, channel_obj):
+                self.channel = channel_obj
+
+            async def send_message(self, embed):
+                await self.channel.send(embed=embed)
+
         class MockInteraction:
             def __init__(self, channel_obj, game_state):
                 self.channel = channel_obj
                 self.channel_id = game_state.channel_id
                 self.user = game_state.current_player()
-
-            async def response_send_message(self, embed):
-                await self.channel.send(embed=embed)
+                self.response = MockResponse(channel_obj)
 
         mock_int = MockInteraction(channel, game)
         await execute_drive(mock_int, game, style)
@@ -498,11 +503,19 @@ async def execute_ai_turn(channel, game: GameState):
         await channel.send(embed=embed)
 
         # Execute the decision
+        class MockResponse:
+            def __init__(self, channel_obj):
+                self.channel = channel_obj
+
+            async def send_message(self, embed):
+                await self.channel.send(embed=embed)
+
         class MockInteraction:
             def __init__(self, channel_obj, game_state):
                 self.channel = channel_obj
                 self.channel_id = game_state.channel_id
                 self.user = game_state.current_player()
+                self.response = MockResponse(channel_obj)
 
         mock_int = MockInteraction(channel, game)
         await handle_fourth_down_decision(mock_int, decision)
@@ -521,11 +534,19 @@ async def execute_ai_turn(channel, game: GameState):
         )
         await channel.send(embed=embed)
 
+        class MockResponse:
+            def __init__(self, channel_obj):
+                self.channel = channel_obj
+
+            async def send_message(self, embed):
+                await self.channel.send(embed=embed)
+
         class MockInteraction:
             def __init__(self, channel_obj, game_state):
                 self.channel = channel_obj
                 self.channel_id = game_state.channel_id
                 self.user = game_state.current_player()
+                self.response = MockResponse(channel_obj)
 
         mock_int = MockInteraction(channel, game)
         await handle_extra_point(mock_int, go_for_two)
